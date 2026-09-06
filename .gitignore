@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target/
+
+# Rust compiler and coverage artifacts
+*.rs.bk
+*.profraw
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# tmp files
+tmp.*
+tmp/
