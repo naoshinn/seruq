@@ -42,7 +42,7 @@ jobs:
           tool: cargo-deny
 
       - name: Check dependencies
-        run: cargo deny check --all-features
+        run: cargo deny --all-features check
 
       - name: Run tests
         run: cargo test --workspace --all-features
