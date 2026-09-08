@@ -15,7 +15,7 @@ impl Color {
     pub fn new(r: f32, g: f32, b: f32) -> Result<Self, ColorError> {
         if !r.is_finite() || !g.is_finite() || !b.is_finite() {
             Err(ColorError::NonFinite)
-        } else if !(0.0 <= r && r <= 1.0) || !(0.0 <= g && g <= 1.0) || !(0.0 <= b && b <= 1.0) {
+        } else if !(0.0..=1.0).contains(&r) || !(0.0..=1.0).contains(&g) || !(0.0..=1.0).contains(&b) {
             Err(ColorError::OutOfRange)
         } else {
             Ok(Color { r, g, b })
