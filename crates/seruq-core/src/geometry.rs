@@ -17,6 +17,12 @@ pub struct Rect {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct PhysicalSize {
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum GeometryError {
     NonFinite,
     NegativeSize,
@@ -71,6 +77,24 @@ impl Rect {
 
     pub fn size(&self) -> &Size {
         &self.size
+    }
+}
+
+impl PhysicalSize {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.width() == 0 || self.height() == 0
     }
 }
 
@@ -191,6 +215,26 @@ mod tests {
             assert_eq!(rect.origin().y(), 200.0);
             assert_eq!(rect.size().width(), 300.0);
             assert_eq!(rect.size().height(), 400.0);
+        }
+    }
+
+    mod physical_size {
+        use super::*;
+
+        #[test]
+        fn exposes_dimensions() {
+            let size = PhysicalSize::new(100, 200);
+
+            assert_eq!(size.width(), 100);
+            assert_eq!(size.height(), 200);
+        }
+
+        #[test]
+        fn is_empty_when_either_dimension_is_zero() {
+            assert!(PhysicalSize::new(0, 0).is_empty());
+            assert!(PhysicalSize::new(0, 100).is_empty());
+            assert!(PhysicalSize::new(100, 0).is_empty());
+            assert!(!PhysicalSize::new(100, 100).is_empty());
         }
     }
 }
