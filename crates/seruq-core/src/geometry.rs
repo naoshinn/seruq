@@ -1,3 +1,5 @@
+use std::{error::Error, fmt};
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Point {
     x: f32,
@@ -23,10 +25,22 @@ pub struct PhysicalSize {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub enum GeometryError {
     NonFinite,
     NegativeSize,
 }
+
+impl fmt::Display for GeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonFinite => formatter.write_str("coordinate is not finite"),
+            Self::NegativeSize => formatter.write_str("size dimension is negative"),
+        }
+    }
+}
+
+impl Error for GeometryError {}
 
 impl Point {
     pub fn new(x: f32, y: f32) -> Result<Self, GeometryError> {
@@ -64,6 +78,10 @@ impl Size {
     pub fn height(&self) -> f32 {
         self.height
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.width <= 0.0 || self.height <= 0.0
+    }
 }
 
 impl Rect {
@@ -71,12 +89,16 @@ impl Rect {
         Self { origin, size }
     }
 
-    pub fn origin(&self) -> &Point {
-        &self.origin
+    pub fn origin(&self) -> Point {
+        self.origin
     }
 
-    pub fn size(&self) -> &Size {
-        &self.size
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.size.is_empty()
     }
 }
 
@@ -106,7 +128,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn accepts_valid() {
+        fn accepts_finite_coordinates() {
             assert!(Point::new(100.0, 200.0).is_ok());
         }
 
@@ -166,6 +188,14 @@ mod tests {
         }
 
         #[test]
+        fn is_empty_when_either_dimension_is_zero() {
+            assert!(Size::new(0.0, 0.0).unwrap().is_empty());
+            assert!(Size::new(0.0, 100.0).unwrap().is_empty());
+            assert!(Size::new(100.0, 0.0).unwrap().is_empty());
+            assert!(!Size::new(100.0, 100.0).unwrap().is_empty());
+        }
+
+        #[test]
         fn rejects_negative_width() {
             assert!(matches!(
                 Size::new(-1.0, 100.0),
@@ -215,6 +245,14 @@ mod tests {
             assert_eq!(rect.origin().y(), 200.0);
             assert_eq!(rect.size().width(), 300.0);
             assert_eq!(rect.size().height(), 400.0);
+        }
+
+        #[test]
+        fn is_empty_follows_its_size() {
+            let origin = Point::new(10.0, 20.0).unwrap();
+
+            assert!(Rect::new(origin, Size::new(0.0, 400.0).unwrap()).is_empty());
+            assert!(!Rect::new(origin, Size::new(300.0, 400.0).unwrap()).is_empty());
         }
     }
 

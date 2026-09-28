@@ -1,7 +1,12 @@
 [package]
 name = "seruq-core"
+description = "Minimal contracts shared by every Seruq implementation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
+
+[lints]
+workspace = true

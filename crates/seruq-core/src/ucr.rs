@@ -6,10 +6,12 @@ pub struct Ucr {
 }
 
 impl Ucr {
+    pub fn new(root: Node) -> Self {
+        Self { root }
+    }
+
     pub fn rect(bounds: Rect, color: Color) -> Self {
-        Self {
-            root: Node::Rect(RectNode { bounds, color }),
-        }
+        Self::new(Node::Rect(RectNode::new(bounds, color)))
     }
 
     pub fn root(&self) -> &Node {
@@ -29,11 +31,15 @@ pub struct RectNode {
 }
 
 impl RectNode {
-    pub fn bounds(&self) -> &Rect {
-        &self.bounds
+    pub fn new(bounds: Rect, color: Color) -> Self {
+        Self { bounds, color }
     }
 
-    pub fn color(&self) -> &Color {
-        &self.color
+    pub fn bounds(&self) -> Rect {
+        self.bounds
+    }
+
+    pub fn color(&self) -> Color {
+        self.color
     }
 }

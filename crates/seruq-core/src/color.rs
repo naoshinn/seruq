@@ -1,3 +1,5 @@
+use std::{error::Error, fmt};
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Color {
     r: f32,
@@ -6,10 +8,22 @@ pub struct Color {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
 pub enum ColorError {
     NonFinite,
     OutOfRange,
 }
+
+impl fmt::Display for ColorError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonFinite => formatter.write_str("color channel is not finite"),
+            Self::OutOfRange => formatter.write_str("color channel is outside 0.0..=1.0"),
+        }
+    }
+}
+
+impl Error for ColorError {}
 
 impl Color {
     pub fn new(r: f32, g: f32, b: f32) -> Result<Self, ColorError> {
@@ -115,5 +129,17 @@ mod tests {
                 Err(ColorError::NonFinite)
             ));
         }
+    }
+
+    #[test]
+    fn errors_are_displayable() {
+        assert_eq!(
+            ColorError::NonFinite.to_string(),
+            "color channel is not finite"
+        );
+        assert_eq!(
+            ColorError::OutOfRange.to_string(),
+            "color channel is outside 0.0..=1.0"
+        );
     }
 }
