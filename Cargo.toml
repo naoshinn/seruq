@@ -1,7 +1,7 @@
 [workspace]
 
 resolver = "3"
-members = ["crates/seruq-core", "crates/seruq-runtime"]
+members = ["crates/seruq-core", "crates/seruq-runtime", "crates/seruq-platform-winit"]
 
 [workspace.package]
 version = "0.1.0"
