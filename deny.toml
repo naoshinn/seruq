@@ -1,5 +1,7 @@
 [advisories]
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is an unmaintained transitive dependency of winit Wayland title rendering; no safe upgrade is available" },
+]
 
 [bans]
 multiple-versions = "warn"

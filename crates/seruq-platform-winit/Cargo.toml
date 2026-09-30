@@ -1,0 +1,13 @@
+[package]
+name = "seruq-platform-winit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+seruq-core.workspace = true
+winit = "0.30.13"
+
+[lints]
+workspace = true
