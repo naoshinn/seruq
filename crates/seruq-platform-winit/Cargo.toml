@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+raw-window-handle = "0.6.2"
 seruq-core.workspace = true
 winit = "0.30.13"
 

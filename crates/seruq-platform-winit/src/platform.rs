@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+};
 use seruq_core::{
     PhysicalSize, Platform, PlatformCommand, PlatformEvent, PlatformHandler, PlatformRunError,
     SurfaceTarget,
@@ -16,6 +19,7 @@ use crate::WinitPlatformError;
 #[derive(Default)]
 pub struct WinitPlatform;
 
+#[derive(Clone)]
 pub struct WinitSurfaceTarget {
     window: Arc<Window>,
 }
@@ -27,6 +31,18 @@ impl WinitSurfaceTarget {
 }
 
 impl SurfaceTarget for WinitSurfaceTarget {}
+
+impl HasDisplayHandle for WinitSurfaceTarget {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        self.window.display_handle()
+    }
+}
+
+impl HasWindowHandle for WinitSurfaceTarget {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        self.window.window_handle()
+    }
+}
 
 struct App<'a, H: PlatformHandler<WinitSurfaceTarget>> {
     handler: &'a mut H,
