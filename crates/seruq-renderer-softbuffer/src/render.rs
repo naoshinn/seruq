@@ -43,7 +43,7 @@ where
             Ok(size) => size,
             Err(error) => return Err(CreateSurfaceError::new(target, error)),
         };
-        
+
         let pixmap = match Pixmap::new(size.width(), size.height()) {
             Some(pixmap) => pixmap,
             None => {
