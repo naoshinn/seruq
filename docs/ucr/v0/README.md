@@ -50,7 +50,8 @@ Container-specific fields = {
 `ElementId` identifies an element as a Map key. The element itself does not need a duplicate ID field.
 The proposal makes `actions` optional and interprets its absence as an empty map.
 
-The proposed root is a Container positioned at `(0, 0)`.
+The root can be any Element type; it does not have to be a Container.
+Its position is relative to the top-left corner of the viewport.
 Its size is explicit and does not automatically follow the window size.
 
 Metadata records the UCR version and can provide `default_font` for elements that omit their own font.
@@ -78,14 +79,15 @@ and the runtime renders the updated document. The call description itself does n
 
 ### 2.1. IDs and Parent–Child Relationships
 
-- IDs are unique within a UCR and remain unchanged when an element moves or its attributes change.
+- IDs are unsigned 64-bit integers, unique within a UCR, and remain unchanged when an element moves or its attributes change.
 - IDs can be generated with a low collision probability. The generation method is left to implementations.
 - Only Containers can have child Elements in the first specification.
-- `children` is an ordered sequence of IDs, and every referenced element must exist in the Map.
-- Cycles and multiple parents are prohibited. The root has no parent.
-- Elements unreachable from the root produce a warning.
+- `children` is an ordered sequence of IDs. Every child referenced by a reachable Container must exist in the Map.
+- Cycles and multiple parents are prohibited within the structure reachable from the root.
+  The root has no parent within that structure; references from unreachable Containers do not count as parents.
+- Elements unreachable from the root produce a warning and are excluded from attribute and graph validity checks.
 
-Details still to be specified: ID width and encoding. Random 128-bit IDs are a candidate, not a finalized requirement.
+Details still to be specified: ID encoding in UCR Binary and UCR JSON.
 Rules for assigning new IDs when duplicating independent elements and updating related references must also be defined.
 
 ## 3. Coordinates, Sizes, and Drawing Order
@@ -283,6 +285,11 @@ Native data types can be used for passing Mutations, so normal execution does no
 An official validator will detect cycles and other violations.
 Validation rules are documented so independent implementations can check the same structural conditions.
 
+Attribute and graph validity checks apply only to elements reachable from the root.
+Unreachable elements produce a warning, but their attribute values and outgoing references are not validated.
+References from unreachable Containers do not count as parents of reachable elements.
+Parsing requirements and constraints enforced by individual data types still apply to the entire document.
+
 | Condition | Result |
 | --- | --- |
 | `root` or `children` references a nonexistent ID | UnknownId |
@@ -294,10 +301,11 @@ Validation rules are documented so independent implementations can check the sam
 
 The proposed additional structural constraints prohibit repeating a child ID within the same Container.
 Duplicate IDs found while reading data produce an error rather than being silently overwritten when constructing the Map.
-Cycle detection covers all elements, including unreachable ones.
+Cycle detection covers only the structure reachable from the root.
 
-The proposed validation sequence is attribute validation, reference existence checks, parent-reference counting,
-cycle detection across all elements, and reachability checks from the root.
+Validation traverses the structure from the root, checking attributes, references, parent relationships, and cycles.
+Elements not reached by this traversal produce a warning.
+When a change makes previously unreachable elements reachable, their validity must be checked before accepting the change.
 
 Details still to be specified: Structural error names, the common diagnostic data type, and handling of unknown Elements and attributes.
 Asset resolution and FFR connection failures are reported separately from structural validation of UCR data.
