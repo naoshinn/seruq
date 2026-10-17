@@ -24,6 +24,14 @@ impl Metadata {
             default_font,
         }
     }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    pub fn default_font(&self) -> Option<&str> {
+        self.default_font.as_deref()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
