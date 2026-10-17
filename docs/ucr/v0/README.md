@@ -87,7 +87,8 @@ and the runtime renders the updated document. The call description itself does n
   The root has no parent within that structure; references from unreachable Containers do not count as parents.
 - Elements unreachable from the root produce a warning and are excluded from attribute and graph validity checks.
 
-Details still to be specified: ID encoding in UCR Binary and UCR JSON.
+The current experimental UCR JSON ID encoding is described in the [JSON mapping](json.md).
+ID encoding in UCR Binary remains unspecified.
 Rules for assigning new IDs when duplicating independent elements and updating related references must also be defined.
 
 ## 3. Coordinates, Sizes, and Drawing Order
@@ -322,12 +323,13 @@ This policy also applies to the transition from v0 to v1.
 
 UCR Binary primarily targets compact storage and efficient loading; UCR JSON targets readability and debugging.
 Official conversion between the two formats is planned. Both formats must be able to represent the same UCR semantics.
+An [experimental JSON mapping](json.md) describes the subset supported by the current Rust implementation.
 
 Migration rules are defined in documents. The official Migrator implements those rules, primarily with Binary input and output.
 Whether it uses an intermediate common model or converts Binary directly is an implementation choice.
 
 Details still to be specified: The type of version values, supported version ranges, responses to unknown versions,
-the official JSON mapping, the Binary layout, extension identification, and migration rules.
+finalization of the experimental JSON mapping, the Binary layout, extension identification, and migration rules.
 
 ## 8. Specification Gaps
 
@@ -339,5 +341,5 @@ The following areas need defined behavior before independent implementations can
 4. Geometry path, fill, and stroke rules.
 5. Events supported by each Element and the FFR argument and result contracts.
 
-The document also leaves ID encoding, Color representation, diagnostic types, and storage encodings unspecified.
+The document also leaves Binary ID encoding, Color representation, diagnostic types, and the Binary layout unspecified.
 These gaps and the proposed designs need to be resolved before v1 is published as an official specification.
