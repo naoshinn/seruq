@@ -1,7 +1,7 @@
 [workspace]
 
 resolver = "3"
-members = ["crates/seruq-ucr", "crates/seruq-ucr-json"]
+members = ["crates/seruq-test-runtime", "crates/seruq-ucr", "crates/seruq-ucr-json"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,8 +11,13 @@ repository = "https://github.com/naoshinn/seruq"
 
 [workspace.dependencies]
 seruq-ucr = { path = "crates/seruq-ucr", version = "0.1.0" }
+seruq-ucr-json = { path = "crates/seruq-ucr-json", version = "0.1.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+winit = "0.30"
+softbuffer = "0.4"
+tiny-skia = "0.12"
+cosmic-text = "0.19"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

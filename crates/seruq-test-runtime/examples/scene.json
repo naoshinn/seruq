@@ -1,0 +1,26 @@
+{
+  "metadata": { "version": "0.1.0" },
+  "root": "0",
+  "elements": {
+    "0": {
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 640, "height": 480 },
+      "kind": { "type": "container", "children": ["1", "2", "3"] }
+    },
+    "1": {
+      "position": { "x": 24, "y": 24 },
+      "size": { "width": 580, "height": 100 },
+      "kind": { "type": "text", "text": "Hello, Seruq!\nA UCR document rendered by a library.", "font_size": 26 }
+    },
+    "2": {
+      "position": { "x": 24, "y": 136 },
+      "size": { "width": 200, "height": 48 },
+      "kind": { "type": "button", "label": "Static button", "font_size": 20 }
+    },
+    "3": {
+      "position": { "x": 24, "y": 204 },
+      "size": { "width": 340, "height": 40 },
+      "kind": { "type": "text_input", "value": "", "font_size": 18, "placeholder": "Static input placeholder" }
+    }
+  }
+}
