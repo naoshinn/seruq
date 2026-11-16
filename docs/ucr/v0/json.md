@@ -12,7 +12,7 @@ A document is a UTF-8 JSON object with three required fields:
 
 | Field | JSON representation |
 | --- | --- |
-| `metadata` | Object with a required string `version` and optional string `default_font` |
+| `metadata` | Object with a required string `version` and optional asset path `default_font` |
 | `root` | Element ID string |
 | `elements` | Object mapping Element ID strings to Element objects |
 
@@ -33,10 +33,10 @@ The `type` field selects the following attributes inside `kind`:
 | Type | Required fields | Optional fields |
 | --- | --- | --- |
 | `container` | `children`: array of Element ID strings | None |
-| `text` | `text`: string, `font_size`: Float | `font`: string |
-| `image` | `source`: string | None |
-| `button` | `label`: string, `font_size`: Float | `font`: string |
-| `text_input` | `value`: string, `font_size`: Float | `font`: string, `placeholder`: string |
+| `text` | `text`: string, `font_size`: number | `font`: asset path |
+| `image` | `source`: asset path | None |
+| `button` | `label`: string, `font_size`: number | `font`: asset path |
+| `text_input` | `value`: string, `font_size`: number | `font`: asset path, `placeholder`: string |
 | `geometry` | None | None |
 
 Optional fields may be omitted or set to `null`; both decode as absent. Writers
@@ -84,37 +84,36 @@ has no UI meaning; `children` retains its original order.
 
 ## Floating-Point Values
 
-Finite f32 values use JSON numbers. The decoder rounds numbers to f32 and rejects
-numbers that overflow to infinity. Negative zero is preserved by the Rust codec.
+Every number is a finite f32 encoded as a JSON number. The decoder rounds numbers to f32
+and rejects numbers that overflow to infinity. Negative zero is preserved by the Rust codec.
 
-Non-finite values use these exact JSON strings:
+NaN and infinities have no JSON representation, because no UCR value can hold them.
+Strings such as `"NaN"` and numeric strings such as `"16"` are rejected.
 
-| Value | JSON representation |
-| --- | --- |
-| NaN | `"NaN"` |
-| Positive infinity | `"inf"` |
-| Negative infinity | `"-inf"` |
+## Asset Paths
 
-Other string spellings and finite numeric strings such as `"16"` are rejected.
-NaN payload bits and the sign of a NaN are not preserved.
-
-These representations allow a draft to retain invalid font sizes for debugging,
-including unused elements whose font sizes are not subject to UI validation.
-They do not relax the constraints of Point or Size.
+Fonts and images are referenced by asset paths encoded as JSON strings. A path is a
+nonempty sequence of `/`-separated segments. Segments cannot be empty, `.`, or `..`,
+and the characters `\`, `:`, and control characters are rejected. For example,
+`"fonts/default.ttf"` is valid; `"/fonts/default.ttf"`, `"../default.ttf"`, and
+`"C:\\fonts\\default.ttf"` are not.
 
 ## Decoding and Validation
 
 Decoding returns `UcrDraft`; it does not run `validate()` or `build()` implicitly.
-Missing references, cycles, duplicate child references, and invalid font sizes can
-be decoded and inspected. Use the core validator to check the reachable UI.
+Missing references, cycles, and duplicate child references can be decoded and
+inspected. Use the core validator to check the reachable UI.
 
-Point and Size values are constructed through their validating constructors:
+Values are constructed through the validating constructors of their data types:
 
 - `position.x` and `position.y` must be finite; negative values are allowed.
 - `size.width` and `size.height` must be finite and nonnegative; zero is allowed.
+- `font_size` must be finite and positive.
+- Asset paths must follow the syntax above.
 
 These type constraints apply even to unused elements. Construction failures report
-the Element ID, whether `position` or `size` failed, and the geometry error reason.
+the Element ID, the field that failed, and the reason; a failure in
+`metadata.default_font` has no Element ID.
 Other representation errors, including duplicate IDs, are reported as JSON errors.
 
 Unknown fields, unknown Element types, duplicate known fields, missing required
