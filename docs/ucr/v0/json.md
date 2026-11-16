@@ -3,7 +3,7 @@
 This document describes the JSON mapping implemented by `seruq-ucr-json` for the
 current Rust model. It is a draft, not a stable storage format or a complete mapping
 of every feature proposed in the [UCR v0 specification](README.md).
-Actions, colors, Geometry drawing data, and Mutations are not implemented yet. There is no
+Colors, Geometry drawing data, Events, and Mutations are not implemented yet. There is no
 JSON Schema at this stage.
 
 ## Document Structure
@@ -21,13 +21,14 @@ The codec preserves `metadata.version` as an opaque string. It does not currentl
 reject unknown UCR versions, infer migrations, or equate this value with the Rust
 crate version. Version compatibility checks remain to be defined.
 
-Each Element object has three required fields and one optional field:
+Each Element object has three required fields and two optional fields:
 
 | Field | JSON representation |
 | --- | --- |
 | `position` | Object with numeric `x` and `y` |
 | `size` | Object with numeric `width` and `height` |
 | `kind` | Object identified by a required string `type` |
+| `actions` | Optional object mapping [timings](#actions) to FFR call objects |
 | `data` | Optional object mapping strings to [values](#state-and-data-values) |
 
 The `type` field selects the following attributes inside `kind`:
@@ -91,6 +92,25 @@ and rejects numbers that overflow to infinity. Negative zero is preserved by the
 
 NaN and infinities have no JSON representation, because no UCR value can hold them.
 Strings such as `"NaN"` and numeric strings such as `"16"` are rejected.
+
+## Actions
+
+`actions` maps a timing name to an object with one required string field, `function_name`:
+
+```json
+"actions": {
+  "activated": { "function_name": "app.confirm" }
+}
+```
+
+The timing names are `pushed`, `released`, `activated`, `focused`, `unfocused`, and
+`value_changed`. Unknown timings, duplicate timings, and unknown fields in a call
+object are rejected. An absent `actions` and an empty object are equivalent, and
+writers omit it when empty. Unlike optional attributes, `actions` cannot be `null`.
+Writers emit timings in the order listed above; the order has no meaning.
+
+The codec does not check whether a function exists for a `function_name`, or whether
+the element's type can produce the timing.
 
 ## State and Data Values
 

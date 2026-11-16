@@ -377,8 +377,34 @@ Event = {
 ```
 
 `function_name` is an identifier independent of actual function names in individual languages.
-FFR connects it to the corresponding implementation. The proposal passes a common Event argument to FFR.
-The ValueChanged payload contains the new string value.
+FFR connects it to the corresponding implementation. An element has at most one FfrCall per Timing.
+The ValueChanged payload contains the new string value; the other timings have no payload.
+
+The proposed function contract:
+
+- A function receives the Event and a read-only view of the current UCR, and returns either a Mutation or a failure.
+  It reads `state`, the target's `data`, and any other part of the UCR to decide what to return.
+- A function does not modify the UCR. Resources that cannot be stored in UCR, such as connections, stay with the function.
+- The runtime produces Events and does not know about FFR. Resolving an Event to a function is a separate step,
+  so Events remain observable for elements without actions.
+
+The proposed resolution of an Event:
+
+1. If the target no longer exists or is not reachable from the root, the Event is discarded.
+2. If the target has no FfrCall for the Event's Timing, nothing is called.
+3. Otherwise the function named by the FfrCall is called, and the Mutation it returns is applied before the next Event is processed.
+
+Three failures are distinguished. None of them changes the UCR, and processing continues with the next Event:
+
+| Failure | Meaning |
+| --- | --- |
+| Unknown function | No function is connected to `function_name` |
+| Function failure | The function ran and reported a failure |
+| Rejected Mutation | The returned Mutation violates an [application rule](#51-ucr-mutation) |
+
+Each failure identifies the element, the Timing, and the `function_name`.
+An implementation should be able to list, when a UCR is loaded, every FfrCall of a reachable element
+whose `function_name` has no connected function, so that missing functions are found before any Event occurs.
 
 | Element | Initial supported Timing proposal |
 | --- | --- |
@@ -389,8 +415,8 @@ The ValueChanged payload contains the new string value.
 The first specification proposes synchronous FFR calls: a function receives an Event and returns a Mutation.
 
 Details still to be specified: The final supported event set, event ordering, cancellation notifications,
-FFR failure and asynchronous execution, unknown `function_name` values,
-and behavior when no action is configured. The event argument structure also needs to be finalized from the proposal above.
+asynchronous execution, the syntax of `function_name`, how failures are delivered to the application,
+and whether an action on an element type that never produces its Timing is a validation warning.
 
 Native data types can be used for passing Mutations, so normal execution does not require encoding and decoding every update.
 
@@ -409,6 +435,8 @@ Operation = Insert { id: ElementId, element: Element, parent: ElementId, index: 
           | RemoveState { key: String }
           | SetData     { id: ElementId, key: String, value: Value }
           | RemoveData  { id: ElementId, key: String }
+          | SetAction    { id: ElementId, timing: Timing, call: FfrCall }
+          | RemoveAction { id: ElementId, timing: Timing }
 ```
 
 | Operation | Effect |
@@ -416,11 +444,13 @@ Operation = Insert { id: ElementId, element: Element, parent: ElementId, index: 
 | Insert | Add a new element to the `children` of `parent` at `index` |
 | Remove | Remove an element and all of its descendants from the Map |
 | Move | Detach an element and insert it into the `children` of `parent` at `index`, counted after detaching |
-| Update | Replace the given position, size, or type-specific attributes of an element; `data` is unchanged |
+| Update | Replace the given position, size, or type-specific attributes of an element; `data` and `actions` are unchanged |
 | SetState | Set one key of the UCR's `state`, replacing any existing value |
 | RemoveState | Remove one key of the UCR's `state` |
 | SetData | Set one key of an element's `data`, replacing any existing value |
 | RemoveData | Remove one key of an element's `data` |
+| SetAction | Set an element's FfrCall for one Timing, replacing any existing one |
+| RemoveAction | Remove an element's FfrCall for one Timing |
 
 Application rules:
 
@@ -433,7 +463,7 @@ Application rules:
   - Move fails if `parent` is the element itself or one of its descendants.
   - Update cannot change an element's type, and cannot replace a Container's `children`.
   - Every operation fails if it names an element that does not exist or is not reachable from the root.
-  - RemoveState and RemoveData have no effect when the key is absent; this is not a failure.
+  - RemoveState, RemoveData, and RemoveAction have no effect when the key or Timing is absent; this is not a failure.
 - SetState and SetData replace the whole value of a key. Changing part of a Sequence or Map means setting the key again.
 - A function that reads the UCR and returns a Mutation relies on the UCR not changing in between.
   Mutations are therefore applied before the next event is processed, and work that completes later
@@ -533,7 +563,7 @@ The following areas need defined behavior before independent implementations can
 2. Shaping and tolerance in text measurement, and Image fitting and placement.
 3. TextInput editing state and its relationship to Mutation application.
 4. Geometry path, fill, and stroke rules.
-5. Events supported by each Element, their ordering, and the FFR failure contract.
+5. Events supported by each Element, their ordering, and how FFR failures are delivered.
 6. The file formats of conformance test cases, and an encoding of Mutations.
 7. Limits on the size and nesting depth of `state` and `data`.
 
