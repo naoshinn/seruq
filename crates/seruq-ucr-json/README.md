@@ -15,5 +15,6 @@ Serde support and JSON-specific types live in this crate. `seruq-ucr` does not
 depend on Serde. The JSON types are implementation details, not a public API.
 
 See the [experimental JSON mapping](../../docs/ucr/v0/json.md) for the data layout,
-ID, number, asset path, action, and state value representations, and decoding rules. There is no JSON Schema
-yet; the mapping can change during v0 development.
+the representations of IDs, numbers, asset paths, actions, and state values, and
+the decoding rules. Events and Mutations have no JSON encoding yet. There is no
+JSON Schema; the mapping can change during v0 development.

@@ -69,9 +69,11 @@ either, this runtime uses installed system fonts. Explicit font files use their
 first face, without system-font fallback. Assets are loaded lazily and cached
 for the runtime's lifetime, so changes to those files are not reloaded.
 
-Buttons and text inputs are static visuals. Input events, focus, editing, and
-FFR are not implemented, and the window does not redraw after `apply` because
-nothing can call it while `run` is blocking. Visible `Geometry` elements return an
+Buttons and text inputs are static visuals. Input events, focus, and editing
+are not implemented, so this runtime produces no events. An application can
+still combine `hit_test`, an event it constructs, `seruq-ffr`, and `apply`; see
+`tests/ffr.rs`. The window does not redraw after `apply` because nothing can
+call it while `run` is blocking. Visible `Geometry` elements return an
 `UnsupportedElement` error because the current UCR model has no shape data.
 Fully clipped elements are skipped, including their asset loading. Renderer
 coordinate limits can also produce an error for otherwise valid UCR documents.

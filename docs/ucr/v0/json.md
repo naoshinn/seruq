@@ -3,8 +3,8 @@
 This document describes the JSON mapping implemented by `seruq-ucr-json` for the
 current Rust model. It is a draft, not a stable storage format or a complete mapping
 of every feature proposed in the [UCR v0 specification](README.md).
-Colors, Geometry drawing data, Events, and Mutations are not implemented yet. There is no
-JSON Schema at this stage.
+Colors, Geometry drawing data, Events, and Mutations are not implemented yet.
+There is no JSON Schema at this stage.
 
 ## Document Structure
 
