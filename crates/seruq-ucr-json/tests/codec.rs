@@ -1,6 +1,6 @@
 use seruq_ucr::{
-    AssetPath, AssetPathError, ElementKind, FontSizeError, GeometryError, Number, ValidationError,
-    ValidationWarning, Value, ValueMap,
+    AssetPath, AssetPathError, ElementKind, FfrCall, FontSizeError, GeometryError, Number, Timing,
+    ValidationError, ValidationWarning, Value, ValueMap,
 };
 use seruq_ucr_json::{Error, from_str, to_string, to_string_pretty};
 
@@ -503,5 +503,66 @@ fn rejects_invalid_state_and_data_values() {
         assert_json_error(&document(&format!(
             r#"{{"position":{{"x":0,"y":0}},"size":{{"width":1,"height":1}},"kind":{{"type":"geometry"}},"data":{value}}}"#
         )));
+    }
+}
+
+#[test]
+fn actions_round_trip_in_timing_order() {
+    let json = element(r#"{"type":"button","label":"","font_size":1}"#).replace(
+        r#""kind""#,
+        r#""actions":{"value_changed":{"function_name":"f"},"unfocused":{"function_name":"e"},
+            "focused":{"function_name":"d"},"activated":{"function_name":"app.confirm"},
+            "released":{"function_name":"b"},"pushed":{"function_name":""}},"kind""#,
+    );
+    let draft = from_str(&json).unwrap();
+    let actions = &draft.elements[&0].actions;
+    assert_eq!(
+        actions.keys().copied().collect::<Vec<_>>(),
+        [
+            Timing::Pushed,
+            Timing::Released,
+            Timing::Activated,
+            Timing::Focused,
+            Timing::Unfocused,
+            Timing::ValueChanged,
+        ]
+    );
+    assert_eq!(actions[&Timing::Activated], FfrCall::new("app.confirm"));
+
+    let encoded = to_string(&draft).unwrap();
+    assert!(encoded.contains(
+        r#""actions":{"pushed":{"function_name":""},"released":{"function_name":"b"},"activated":{"function_name":"app.confirm"},"#
+    ));
+    assert_eq!(from_str(&encoded).unwrap(), draft);
+}
+
+#[test]
+fn absent_and_empty_actions_are_equivalent() {
+    let absent = from_str(&element(r#"{"type":"geometry"}"#)).unwrap();
+    let empty =
+        from_str(&element(r#"{"type":"geometry"}"#).replace(r#""kind""#, r#""actions":{},"kind""#))
+            .unwrap();
+    assert_eq!(empty, absent);
+    assert!(!to_string(&absent).unwrap().contains(r#""actions""#));
+}
+
+#[test]
+fn rejects_invalid_actions() {
+    for actions in [
+        r#"{"clicked":{"function_name":"f"}}"#,
+        r#"{"Activated":{"function_name":"f"}}"#,
+        r#"{"activated":{"function_name":"f"},"activated":{"function_name":"g"}}"#,
+        r#"{"activated":{}}"#,
+        r#"{"activated":{"function_name":"f","arguments":[]}}"#,
+        r#"{"activated":{"function_name":1}}"#,
+        r#"{"activated":"f"}"#,
+        r#"{"activated":null}"#,
+        "null",
+        "[]",
+    ] {
+        assert_json_error(
+            &element(r#"{"type":"geometry"}"#)
+                .replace(r#""kind""#, &format!(r#""actions":{actions},"kind""#)),
+        );
     }
 }

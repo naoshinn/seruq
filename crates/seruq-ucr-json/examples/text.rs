@@ -10,16 +10,15 @@ fn main() {
             let mut elements = HashMap::new();
             let _ = elements.insert(
                 0,
-                Element {
-                    position: Point::new(100.0, 200.0).unwrap(),
-                    size: Size::new(300.0, 400.0).unwrap(),
-                    kind: ElementKind::Text {
+                Element::new(
+                    Point::new(100.0, 200.0).unwrap(),
+                    Size::new(300.0, 400.0).unwrap(),
+                    ElementKind::Text {
                         text: "Hello!".to_string(),
                         font_size: FontSize::new(11.0).unwrap(),
                         font: None,
                     },
-                    data: ValueMap::new(),
-                },
+                ),
             );
             elements
         },

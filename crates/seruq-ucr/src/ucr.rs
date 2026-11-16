@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{AssetPath, FontSize, Point, Size, ValueMap};
+use crate::{Actions, AssetPath, FontSize, Point, Size, ValueMap};
 
 pub type ElementId = u64;
 
@@ -41,8 +41,23 @@ pub struct Element {
     pub position: Point,
     pub size: Size,
     pub kind: ElementKind,
+    /// Functions to call through FFR when something happens to this element.
+    pub actions: Actions,
     /// Application data that lives and dies with this element.
     pub data: ValueMap,
+}
+
+impl Element {
+    /// An element without actions or data.
+    pub fn new(position: Point, size: Size, kind: ElementKind) -> Self {
+        Self {
+            position,
+            size,
+            kind,
+            actions: Actions::new(),
+            data: ValueMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

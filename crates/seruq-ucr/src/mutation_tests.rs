@@ -1,16 +1,15 @@
 use super::{MutationError, MutationErrorReason, MutationOp};
 use crate::{
-    Element, ElementId, ElementKind, FontSize, Metadata, Point, Size, Ucr, UcrDraft, Value,
-    ValueMap,
+    Element, ElementId, ElementKind, FfrCall, FontSize, Metadata, Point, Size, Timing, Ucr,
+    UcrDraft, Value, ValueMap,
 };
 
 fn element(kind: ElementKind) -> Element {
-    Element {
-        position: Point::new(0.0, 0.0).unwrap(),
-        size: Size::new(100.0, 100.0).unwrap(),
+    Element::new(
+        Point::new(0.0, 0.0).unwrap(),
+        Size::new(100.0, 100.0).unwrap(),
         kind,
-        data: ValueMap::new(),
-    }
+    )
 }
 
 fn container(children: &[ElementId]) -> ElementKind {
@@ -624,5 +623,90 @@ fn failure_discards_state_and_data_changes() {
         ],
         2,
         MutationErrorReason::TargetsRoot,
+    );
+}
+
+fn set_action(id: ElementId, timing: Timing, function_name: &str) -> MutationOp {
+    MutationOp::SetAction {
+        id,
+        timing,
+        call: FfrCall::new(function_name),
+    }
+}
+
+#[test]
+fn set_action_adds_and_replaces_calls() {
+    let mut ucr = ucr();
+    let applied = ucr
+        .apply(&[
+            set_action(2, Timing::Activated, "app.first"),
+            set_action(2, Timing::Pushed, "app.push"),
+            set_action(2, Timing::Activated, "app.second"),
+        ])
+        .unwrap();
+    let actions = &ucr.data().elements[&2].actions;
+    assert_eq!(actions.len(), 2);
+    assert_eq!(actions[&Timing::Activated], FfrCall::new("app.second"));
+    assert_eq!(actions[&Timing::Pushed], FfrCall::new("app.push"));
+    assert!(ucr.data().elements[&3].actions.is_empty());
+    assert_eq!(applied.updated().iter().copied().collect::<Vec<_>>(), [2]);
+    assert_consistent(&ucr);
+}
+
+#[test]
+fn remove_action_ignores_absent_timings() {
+    let mut ucr = ucr();
+    ucr.apply(&[set_action(2, Timing::Activated, "app.first")])
+        .unwrap();
+    let applied = ucr
+        .apply(&[
+            MutationOp::RemoveAction {
+                id: 2,
+                timing: Timing::Pushed,
+            },
+            MutationOp::RemoveAction {
+                id: 3,
+                timing: Timing::Activated,
+            },
+        ])
+        .unwrap();
+    assert!(applied.updated().is_empty());
+    assert_eq!(ucr.data().elements[&2].actions.len(), 1);
+
+    let applied = ucr
+        .apply(&[MutationOp::RemoveAction {
+            id: 2,
+            timing: Timing::Activated,
+        }])
+        .unwrap();
+    assert_eq!(applied.updated().iter().copied().collect::<Vec<_>>(), [2]);
+    assert!(ucr.data().elements[&2].actions.is_empty());
+}
+
+#[test]
+fn update_keeps_actions() {
+    let mut ucr = ucr();
+    ucr.apply(&[
+        set_action(2, Timing::Activated, "app.first"),
+        update_kind(2, text("changed")),
+    ])
+    .unwrap();
+    assert_eq!(ucr.data().elements[&2].actions.len(), 1);
+}
+
+#[test]
+fn action_operations_reject_invalid_targets() {
+    assert_rejected(
+        &[set_action(8, Timing::Activated, "app.first")],
+        0,
+        MutationErrorReason::ElementNotFound { id: 8 },
+    );
+    assert_rejected(
+        &[MutationOp::RemoveAction {
+            id: 9,
+            timing: Timing::Activated,
+        }],
+        0,
+        MutationErrorReason::Unreachable { id: 9 },
     );
 }

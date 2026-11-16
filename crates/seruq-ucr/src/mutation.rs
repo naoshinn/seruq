@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, mem};
 
-use crate::{Element, ElementId, ElementKind, Point, Size, Ucr, Value, ValueMap};
+use crate::{Element, ElementId, ElementKind, FfrCall, Point, Size, Timing, Ucr, Value};
 
 /// An ordered sequence of changes, applied to a [`Ucr`] as a single unit.
 pub type Mutation = Vec<MutationOp>;
@@ -44,6 +44,14 @@ pub enum MutationOp {
     },
     /// Remove one key of an element's `data`. An absent key is not an error.
     RemoveData { id: ElementId, key: String },
+    /// Set an element's action for one timing, replacing any existing call.
+    SetAction {
+        id: ElementId,
+        timing: Timing,
+        call: FfrCall,
+    },
+    /// Remove an element's action for one timing. An absent action is not an error.
+    RemoveAction { id: ElementId, timing: Timing },
 }
 
 /// The elements and state keys affected by a successfully applied [`Mutation`].
@@ -69,7 +77,8 @@ impl Applied {
         &self.removed
     }
 
-    /// Surviving elements that were moved or updated, including changes to their `data`.
+    /// Surviving elements that were moved or updated, including changes to their
+    /// `data` and `actions`.
     pub fn updated(&self) -> &BTreeSet<ElementId> {
         &self.updated
     }
@@ -77,6 +86,13 @@ impl Applied {
     /// Keys of the document's `state` that were set or removed.
     pub fn state(&self) -> &BTreeSet<String> {
         &self.state
+    }
+
+    // Changes to an element inserted by the same mutation are part of its insertion.
+    fn mark_updated(&mut self, id: ElementId) {
+        if !self.inserted.contains(&id) {
+            self.updated.insert(id);
+        }
     }
 }
 
@@ -224,9 +240,7 @@ impl Ucr {
                 self.children_mut(old_parent)?.retain(|child| *child != id);
                 self.children_mut(parent)?.insert(index, id);
                 self.parents.insert(id, parent);
-                if !applied.inserted.contains(&id) {
-                    applied.updated.insert(id);
-                }
+                applied.mark_updated(id);
             }
             MutationOp::Update {
                 id,
@@ -254,9 +268,7 @@ impl Ucr {
                 if let Some(size) = size {
                     element.size = *size;
                 }
-                if !applied.inserted.contains(&id) {
-                    applied.updated.insert(id);
-                }
+                applied.mark_updated(id);
             }
             MutationOp::SetState { key, value } => {
                 self.data.state.insert(key.clone(), value.clone());
@@ -268,14 +280,23 @@ impl Ucr {
                 }
             }
             MutationOp::SetData { id, key, value } => {
-                self.data_mut(*id)?.insert(key.clone(), value.clone());
-                if !applied.inserted.contains(id) {
-                    applied.updated.insert(*id);
-                }
+                let data = &mut self.element_mut(*id)?.data;
+                data.insert(key.clone(), value.clone());
+                applied.mark_updated(*id);
             }
             MutationOp::RemoveData { id, key } => {
-                if self.data_mut(*id)?.remove(key).is_some() && !applied.inserted.contains(id) {
-                    applied.updated.insert(*id);
+                if self.element_mut(*id)?.data.remove(key).is_some() {
+                    applied.mark_updated(*id);
+                }
+            }
+            MutationOp::SetAction { id, timing, call } => {
+                let actions = &mut self.element_mut(*id)?.actions;
+                actions.insert(*timing, call.clone());
+                applied.mark_updated(*id);
+            }
+            MutationOp::RemoveAction { id, timing } => {
+                if self.element_mut(*id)?.actions.remove(timing).is_some() {
+                    applied.mark_updated(*id);
                 }
             }
         }
@@ -292,12 +313,12 @@ impl Ucr {
         }
     }
 
-    fn data_mut(&mut self, id: ElementId) -> Result<&mut ValueMap, MutationErrorReason> {
+    fn element_mut(&mut self, id: ElementId) -> Result<&mut Element, MutationErrorReason> {
         self.check_attached(id)?;
-        match self.data.elements.get_mut(&id) {
-            Some(element) => Ok(&mut element.data),
-            None => Err(MutationErrorReason::ElementNotFound { id }),
-        }
+        self.data
+            .elements
+            .get_mut(&id)
+            .ok_or(MutationErrorReason::ElementNotFound { id })
     }
 
     fn children_mut(&mut self, id: ElementId) -> Result<&mut Vec<ElementId>, MutationErrorReason> {

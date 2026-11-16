@@ -18,6 +18,7 @@ tiny-skia.workspace = true
 cosmic-text.workspace = true
 
 [dev-dependencies]
+seruq-ffr.workspace = true
 seruq-ucr-json.workspace = true
 
 [[example]]

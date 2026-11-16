@@ -17,12 +17,11 @@ fn draft(
             .map(|(id, kind)| {
                 (
                     id,
-                    Element {
-                        position: Point::new(0.0, 0.0).unwrap(),
-                        size: Size::new(100.0, 100.0).unwrap(),
+                    Element::new(
+                        Point::new(0.0, 0.0).unwrap(),
+                        Size::new(100.0, 100.0).unwrap(),
                         kind,
-                        data: ValueMap::new(),
-                    },
+                    ),
                 )
             })
             .collect(),

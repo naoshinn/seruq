@@ -1450,10 +1450,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "seruq-ffr"
+version = "0.1.0"
+dependencies = [
+ "seruq-ucr",
+]
+
+[[package]]
 name = "seruq-test-runtime"
 version = "0.1.0"
 dependencies = [
  "cosmic-text",
+ "seruq-ffr",
  "seruq-ucr",
  "seruq-ucr-json",
  "softbuffer",

@@ -2,7 +2,8 @@ use std::{collections::BTreeMap, fmt};
 
 use serde::{Deserialize, Deserializer, Serialize, de};
 use seruq_ucr::{
-    AssetPath, Element, ElementId, ElementKind, FontSize, Metadata, Point, Size, UcrDraft,
+    AssetPath, Element, ElementId, ElementKind, FfrCall, FontSize, Metadata, Point, Size, Timing,
+    UcrDraft,
 };
 
 use crate::{
@@ -36,8 +37,31 @@ struct ElementJson {
     position: PointJson,
     size: SizeJson,
     kind: ElementKindJson,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_actions",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    actions: BTreeMap<TimingJson, FfrCallJson>,
     #[serde(default, skip_serializing_if = "JsonValueMap::is_empty")]
     data: JsonValueMap,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+enum TimingJson {
+    Pushed,
+    Released,
+    Activated,
+    Focused,
+    Unfocused,
+    ValueChanged,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FfrCallJson {
+    function_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -110,6 +134,18 @@ impl From<&UcrDraft> for UcrJson {
                                 height: JsonFloat(element.size.height()),
                             },
                             kind: (&element.kind).into(),
+                            actions: element
+                                .actions
+                                .iter()
+                                .map(|(&timing, call)| {
+                                    (
+                                        timing.into(),
+                                        FfrCallJson {
+                                            function_name: call.function_name.clone(),
+                                        },
+                                    )
+                                })
+                                .collect(),
                             data: JsonValueMap(element.data.clone()),
                         },
                     )
@@ -124,36 +160,42 @@ impl TryFrom<UcrJson> for UcrDraft {
     type Error = Error;
 
     fn try_from(document: UcrJson) -> Result<Self, Self::Error> {
-        let elements =
-            document
-                .elements
-                .into_iter()
-                .map(|(id, element)| {
-                    let position = Point::new(element.position.x.0, element.position.y.0).map_err(
-                        |reason| Error::InvalidGeometry {
+        let elements = document
+            .elements
+            .into_iter()
+            .map(|(id, element)| {
+                let position =
+                    Point::new(element.position.x.0, element.position.y.0).map_err(|reason| {
+                        Error::InvalidGeometry {
                             element: id.0,
                             field: "position",
                             reason,
-                        },
-                    )?;
-                    let size = Size::new(element.size.width.0, element.size.height.0).map_err(
-                        |reason| Error::InvalidGeometry {
+                        }
+                    })?;
+                let size =
+                    Size::new(element.size.width.0, element.size.height.0).map_err(|reason| {
+                        Error::InvalidGeometry {
                             element: id.0,
                             field: "size",
                             reason,
-                        },
-                    )?;
-                    Ok((
-                        id.0,
-                        Element {
-                            position,
-                            size,
-                            kind: element.kind.into_kind(id.0)?,
-                            data: element.data.0,
-                        },
-                    ))
-                })
-                .collect::<Result<_, Error>>()?;
+                        }
+                    })?;
+                Ok((
+                    id.0,
+                    Element {
+                        position,
+                        size,
+                        kind: element.kind.into_kind(id.0)?,
+                        actions: element
+                            .actions
+                            .into_iter()
+                            .map(|(timing, call)| (timing.into(), FfrCall::new(call.function_name)))
+                            .collect(),
+                        data: element.data.0,
+                    },
+                ))
+            })
+            .collect::<Result<_, Error>>()?;
 
         let default_font = document
             .metadata
@@ -281,6 +323,58 @@ fn asset_from_json(
         field,
         reason,
     })
+}
+
+impl From<Timing> for TimingJson {
+    fn from(timing: Timing) -> Self {
+        match timing {
+            Timing::Pushed => Self::Pushed,
+            Timing::Released => Self::Released,
+            Timing::Activated => Self::Activated,
+            Timing::Focused => Self::Focused,
+            Timing::Unfocused => Self::Unfocused,
+            Timing::ValueChanged => Self::ValueChanged,
+        }
+    }
+}
+
+impl From<TimingJson> for Timing {
+    fn from(timing: TimingJson) -> Self {
+        match timing {
+            TimingJson::Pushed => Self::Pushed,
+            TimingJson::Released => Self::Released,
+            TimingJson::Activated => Self::Activated,
+            TimingJson::Focused => Self::Focused,
+            TimingJson::Unfocused => Self::Unfocused,
+            TimingJson::ValueChanged => Self::ValueChanged,
+        }
+    }
+}
+
+fn deserialize_actions<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<TimingJson, FfrCallJson>, D::Error> {
+    struct ActionsVisitor;
+
+    impl<'de> de::Visitor<'de> for ActionsVisitor {
+        type Value = BTreeMap<TimingJson, FfrCallJson>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("an object mapping unique timings to FFR calls")
+        }
+
+        fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut actions = BTreeMap::new();
+            while let Some((timing, call)) = map.next_entry::<TimingJson, FfrCallJson>()? {
+                if actions.insert(timing, call).is_some() {
+                    return Err(de::Error::custom("duplicate action timing"));
+                }
+            }
+            Ok(actions)
+        }
+    }
+
+    deserializer.deserialize_map(ActionsVisitor)
 }
 
 // A normal map deserializer silently overwrites duplicate IDs.

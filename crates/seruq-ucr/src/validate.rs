@@ -18,6 +18,11 @@ impl Ucr {
         self.data
     }
 
+    /// Whether the element exists and is the root or one of its descendants.
+    pub fn is_reachable(&self, id: ElementId) -> bool {
+        id == self.data.root || self.parents.contains_key(&id)
+    }
+
     /// The parent Container of an element reachable from the root.
     pub fn parent(&self, id: ElementId) -> Option<ElementId> {
         self.parents.get(&id).copied()

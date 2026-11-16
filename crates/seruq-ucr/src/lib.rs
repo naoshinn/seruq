@@ -1,4 +1,6 @@
 mod asset;
+mod error;
+mod event;
 mod font_size;
 mod geometry;
 mod mutation;
@@ -7,6 +9,7 @@ mod validate;
 mod value;
 
 pub use asset::{AssetPath, AssetPathError};
+pub use event::{Actions, Event, EventKind, FfrCall, Timing};
 pub use font_size::{FontSize, FontSizeError};
 pub use geometry::{GeometryError, Point, Size};
 pub use mutation::{Applied, Mutation, MutationError, MutationErrorReason, MutationOp};

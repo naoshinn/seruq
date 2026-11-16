@@ -28,12 +28,11 @@ fn text() -> ElementKind {
 }
 
 fn element(x: f32, y: f32, width: f32, height: f32, kind: ElementKind) -> Element {
-    Element {
-        position: Point::new(x, y).unwrap(),
-        size: Size::new(width, height).unwrap(),
+    Element::new(
+        Point::new(x, y).unwrap(),
+        Size::new(width, height).unwrap(),
         kind,
-        data: ValueMap::new(),
-    }
+    )
 }
 
 fn runtime(elements: impl IntoIterator<Item = (ElementId, Element)>) -> Runtime {
