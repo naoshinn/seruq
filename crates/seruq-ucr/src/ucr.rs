@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Point, Size};
+use crate::{AssetPath, FontSize, Point, Size};
 
 pub type ElementId = u64;
 
@@ -14,11 +14,11 @@ pub struct UcrDraft {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
     version: String,
-    default_font: Option<String>,
+    default_font: Option<AssetPath>,
 }
 
 impl Metadata {
-    pub fn new(version: String, default_font: Option<String>) -> Self {
+    pub fn new(version: String, default_font: Option<AssetPath>) -> Self {
         Self {
             version,
             default_font,
@@ -29,8 +29,8 @@ impl Metadata {
         &self.version
     }
 
-    pub fn default_font(&self) -> Option<&str> {
-        self.default_font.as_deref()
+    pub fn default_font(&self) -> Option<&AssetPath> {
+        self.default_font.as_ref()
     }
 }
 
@@ -48,24 +48,23 @@ pub enum ElementKind {
     },
     Text {
         text: String,
-        font_size: f32,
-        font: Option<String>,
+        font_size: FontSize,
+        font: Option<AssetPath>,
     },
     Image {
-        source: String,
+        source: AssetPath,
     },
     Button {
         label: String,
-        font_size: f32,
-        font: Option<String>,
+        font_size: FontSize,
+        font: Option<AssetPath>,
     },
     TextInput {
         value: String,
-        font_size: f32,
-        font: Option<String>,
+        font_size: FontSize,
+        font: Option<AssetPath>,
         placeholder: Option<String>,
     },
-
     Geometry,
 }
 

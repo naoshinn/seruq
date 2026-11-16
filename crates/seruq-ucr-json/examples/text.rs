@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use seruq_ucr::{Element, ElementKind, Metadata, Point, Size, UcrDraft};
+use seruq_ucr::{Element, ElementKind, FontSize, Metadata, Point, Size, UcrDraft};
 
 fn main() {
     let ucr = UcrDraft {
@@ -15,7 +15,7 @@ fn main() {
                     size: Size::new(300.0, 400.0).unwrap(),
                     kind: ElementKind::Text {
                         text: "Hello!".to_string(),
-                        font_size: 11.0,
+                        font_size: FontSize::new(11.0).unwrap(),
                         font: None,
                     },
                 },

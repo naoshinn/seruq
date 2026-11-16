@@ -3,56 +3,24 @@ use std::{
     path::PathBuf,
 };
 
-use seruq_ucr::{ElementId, ElementKind, Ucr};
+use seruq_ucr::{AssetPath, ElementId, ElementKind, Ucr};
 use tiny_skia::{
     Color, FillRule, FilterQuality, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Transform,
 };
 
 use crate::{
     Error, Frame,
+    layout::{Bounds, layout},
     text::{TextRenderer, TextStyle},
 };
 
-/// Physical bounds. f64 keeps accumulated logical coordinates from overflowing f32.
-#[derive(Clone, Copy)]
-pub(crate) struct Bounds {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
-impl Bounds {
-    pub fn intersect(self, other: Self) -> Option<Self> {
-        let x = self.x.max(other.x);
-        let y = self.y.max(other.y);
-        let right = (self.x + self.width).min(other.x + other.width);
-        let bottom = (self.y + self.height).min(other.y + other.height);
-        (right > x && bottom > y).then_some(Self {
-            x,
-            y,
-            width: right - x,
-            height: bottom - y,
-        })
-    }
-
-    pub fn inset(self, amount: f64) -> Self {
-        Self {
-            x: self.x + amount,
-            y: self.y + amount,
-            width: (self.width - 2.0 * amount).max(0.0),
-            height: (self.height - 2.0 * amount).max(0.0),
-        }
-    }
-
-    fn rect(self) -> Option<Rect> {
-        Rect::from_xywh(
-            self.x as f32,
-            self.y as f32,
-            self.width as f32,
-            self.height as f32,
-        )
-    }
+fn rect(bounds: Bounds) -> Option<Rect> {
+    Rect::from_xywh(
+        bounds.x as f32,
+        bounds.y as f32,
+        bounds.width as f32,
+        bounds.height as f32,
+    )
 }
 
 pub(crate) struct Renderer {
@@ -90,32 +58,25 @@ impl Renderer {
             height: f64::from(height),
         };
         let data = document.data();
-        let mut stack = vec![(data.root, 0.0, 0.0, viewport)];
-        while let Some((id, parent_x, parent_y, parent_clip)) = stack.pop() {
-            // Ucr guarantees that every reachable reference exists and has a unique parent.
+        for placed in layout(document) {
+            let id = placed.id;
             let element = &data.elements[&id];
-            let x = parent_x + f64::from(element.position.x());
-            let y = parent_y + f64::from(element.position.y());
-            let bounds = Bounds {
-                x: x * scale,
-                y: y * scale,
-                width: f64::from(element.size.width()) * scale,
-                height: f64::from(element.size.height()) * scale,
-            };
+            // Physical bounds.
+            let bounds = placed.bounds.scale(scale);
             if ![bounds.x, bounds.y, bounds.width, bounds.height]
                 .iter()
                 .all(|value| value.is_finite())
             {
                 return Err(Error::InvalidLayout { element: id });
             }
-            let Some(clip) = parent_clip.intersect(bounds) else {
+            let Some(clip) = placed
+                .visible
+                .and_then(|visible| visible.scale(scale).intersect(viewport))
+            else {
                 continue;
             };
             match &element.kind {
-                ElementKind::Container { children } => {
-                    // Push in reverse so each subtree is completed in children order.
-                    stack.extend(children.iter().rev().map(|&child| (child, x, y, clip)));
-                }
+                ElementKind::Container { .. } => {}
                 ElementKind::Text {
                     text,
                     font_size,
@@ -128,11 +89,11 @@ impl Renderer {
                             element: id,
                             bounds,
                             clip,
-                            size: f64::from(*font_size) * scale,
+                            size: f64::from(font_size.get()) * scale,
                             font: font
-                                .as_deref()
+                                .as_ref()
                                 .or(data.metadata.default_font())
-                                .map(|path| self.asset_base.join(path)),
+                                .map(|path| self.asset_base.join(path.as_str())),
                             centered: false,
                             placeholder: false,
                         },
@@ -154,11 +115,11 @@ impl Renderer {
                             element: id,
                             bounds: bounds.inset(4.0 * scale),
                             clip,
-                            size: f64::from(*font_size) * scale,
+                            size: f64::from(font_size.get()) * scale,
                             font: font
-                                .as_deref()
+                                .as_ref()
                                 .or(data.metadata.default_font())
-                                .map(|path| self.asset_base.join(path)),
+                                .map(|path| self.asset_base.join(path.as_str())),
                             centered: true,
                             placeholder: false,
                         },
@@ -183,11 +144,11 @@ impl Renderer {
                             element: id,
                             bounds: bounds.inset(4.0 * scale),
                             clip,
-                            size: f64::from(*font_size) * scale,
+                            size: f64::from(font_size.get()) * scale,
                             font: font
-                                .as_deref()
+                                .as_ref()
                                 .or(data.metadata.default_font())
-                                .map(|path| self.asset_base.join(path)),
+                                .map(|path| self.asset_base.join(path.as_str())),
                             centered: false,
                             placeholder: value.is_empty(),
                         },
@@ -208,11 +169,11 @@ impl Renderer {
         &mut self,
         pixmap: &mut Pixmap,
         id: ElementId,
-        source: &str,
+        source: &AssetPath,
         bounds: Bounds,
         clip: Bounds,
     ) -> Result<(), Error> {
-        let path = self.asset_base.join(source);
+        let path = self.asset_base.join(source.as_str());
         let image = match self.images.entry(path) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
@@ -240,7 +201,7 @@ impl Renderer {
                 width: pixmap.width(),
                 height: pixmap.height(),
             })?;
-        if let Some(rect) = clip.rect() {
+        if let Some(rect) = rect(clip) {
             mask.fill_path(
                 &PathBuilder::from_rect(rect),
                 FillRule::Winding,
@@ -264,7 +225,7 @@ impl Renderer {
 }
 
 fn fill_rect(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, color: Color) {
-    if let Some(rect) = bounds.intersect(clip).and_then(Bounds::rect) {
+    if let Some(rect) = bounds.intersect(clip).and_then(rect) {
         let mut paint = Paint::default();
         paint.set_color(color);
         pixmap.fill_rect(rect, &paint, Transform::identity(), None);

@@ -1,7 +1,9 @@
 use std::{collections::BTreeMap, fmt};
 
 use serde::{Deserialize, Deserializer, Serialize, de};
-use seruq_ucr::{Element, ElementKind, Metadata, Point, Size, UcrDraft};
+use seruq_ucr::{
+    AssetPath, Element, ElementId, ElementKind, FontSize, Metadata, Point, Size, UcrDraft,
+};
 
 use crate::{
     Error,
@@ -84,7 +86,7 @@ impl From<&UcrDraft> for UcrJson {
         Self {
             metadata: MetadataJson {
                 version: draft.metadata.version().to_owned(),
-                default_font: draft.metadata.default_font().map(str::to_owned),
+                default_font: draft.metadata.default_font().map(asset_to_json),
             },
             root: JsonId(draft.root),
             elements: draft
@@ -139,14 +141,20 @@ impl TryFrom<UcrJson> for UcrDraft {
                         Element {
                             position,
                             size,
-                            kind: element.kind.into(),
+                            kind: element.kind.into_kind(id.0)?,
                         },
                     ))
                 })
                 .collect::<Result<_, Error>>()?;
 
+        let default_font = document
+            .metadata
+            .default_font
+            .map(|path| asset_from_json(path, None, "default_font"))
+            .transpose()?;
+
         Ok(Self {
-            metadata: Metadata::new(document.metadata.version, document.metadata.default_font),
+            metadata: Metadata::new(document.metadata.version, default_font),
             root: document.root.0,
             elements,
         })
@@ -165,11 +173,11 @@ impl From<&ElementKind> for ElementKindJson {
                 font,
             } => Self::Text {
                 text: text.clone(),
-                font_size: JsonFloat(*font_size),
-                font: font.clone(),
+                font_size: JsonFloat(font_size.get()),
+                font: font.as_ref().map(asset_to_json),
             },
             ElementKind::Image { source } => Self::Image {
-                source: source.clone(),
+                source: asset_to_json(source),
             },
             ElementKind::Button {
                 label,
@@ -177,8 +185,8 @@ impl From<&ElementKind> for ElementKindJson {
                 font,
             } => Self::Button {
                 label: label.clone(),
-                font_size: JsonFloat(*font_size),
-                font: font.clone(),
+                font_size: JsonFloat(font_size.get()),
+                font: font.as_ref().map(asset_to_json),
             },
             ElementKind::TextInput {
                 value,
@@ -187,8 +195,8 @@ impl From<&ElementKind> for ElementKindJson {
                 placeholder,
             } => Self::TextInput {
                 value: value.clone(),
-                font_size: JsonFloat(*font_size),
-                font: font.clone(),
+                font_size: JsonFloat(font_size.get()),
+                font: font.as_ref().map(asset_to_json),
                 placeholder: placeholder.clone(),
             },
             ElementKind::Geometry => Self::Geometry {},
@@ -196,45 +204,74 @@ impl From<&ElementKind> for ElementKindJson {
     }
 }
 
-impl From<ElementKindJson> for ElementKind {
-    fn from(kind: ElementKindJson) -> Self {
-        match kind {
-            ElementKindJson::Container { children } => Self::Container {
+impl ElementKindJson {
+    fn into_kind(self, id: ElementId) -> Result<ElementKind, Error> {
+        let font_size = |value: JsonFloat| {
+            FontSize::new(value.0).map_err(|reason| Error::InvalidFontSize {
+                element: id,
+                reason,
+            })
+        };
+        let font = |path: Option<String>| {
+            path.map(|path| asset_from_json(path, Some(id), "font"))
+                .transpose()
+        };
+
+        Ok(match self {
+            Self::Container { children } => ElementKind::Container {
                 children: children.into_iter().map(|id| id.0).collect(),
             },
-            ElementKindJson::Text {
+            Self::Text {
                 text,
-                font_size,
-                font,
-            } => Self::Text {
+                font_size: size,
+                font: path,
+            } => ElementKind::Text {
                 text,
-                font_size: font_size.0,
-                font,
+                font_size: font_size(size)?,
+                font: font(path)?,
             },
-            ElementKindJson::Image { source } => Self::Image { source },
-            ElementKindJson::Button {
+            Self::Image { source } => ElementKind::Image {
+                source: asset_from_json(source, Some(id), "source")?,
+            },
+            Self::Button {
                 label,
-                font_size,
-                font,
-            } => Self::Button {
+                font_size: size,
+                font: path,
+            } => ElementKind::Button {
                 label,
-                font_size: font_size.0,
-                font,
+                font_size: font_size(size)?,
+                font: font(path)?,
             },
-            ElementKindJson::TextInput {
+            Self::TextInput {
                 value,
-                font_size,
-                font,
+                font_size: size,
+                font: path,
                 placeholder,
-            } => Self::TextInput {
+            } => ElementKind::TextInput {
                 value,
-                font_size: font_size.0,
-                font,
+                font_size: font_size(size)?,
+                font: font(path)?,
                 placeholder,
             },
-            ElementKindJson::Geometry {} => Self::Geometry,
-        }
+            Self::Geometry {} => ElementKind::Geometry,
+        })
     }
+}
+
+fn asset_to_json(path: &AssetPath) -> String {
+    path.as_str().to_owned()
+}
+
+fn asset_from_json(
+    path: String,
+    element: Option<ElementId>,
+    field: &'static str,
+) -> Result<AssetPath, Error> {
+    AssetPath::new(path).map_err(|reason| Error::InvalidAssetPath {
+        element,
+        field,
+        reason,
+    })
 }
 
 // A normal map deserializer silently overwrites duplicate IDs.

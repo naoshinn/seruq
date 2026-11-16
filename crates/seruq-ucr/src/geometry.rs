@@ -51,7 +51,7 @@ impl Size {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeometryError {
     NonFinite,
     Negative,

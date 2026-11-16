@@ -21,15 +21,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (document, warnings) = draft.build().map_err(|report| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!(
-                "UCR validation failed: {} errors, {} warnings",
-                report.errors().len(),
-                report.warnings().len()
-            ),
+            format!("UCR validation failed: {:?}", report.errors()),
         )
     })?;
-    if !warnings.is_empty() {
-        eprintln!("UCR validation: {} warnings", warnings.len());
+    for warning in &warnings {
+        eprintln!("UCR validation warning: {warning:?}");
     }
 
     // Choosing the document's directory as the asset base is this example's policy.

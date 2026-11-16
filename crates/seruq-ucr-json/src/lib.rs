@@ -2,15 +2,16 @@
 //!
 //! Decoding produces a [`UcrDraft`]. Call [`UcrDraft::build`] to validate its
 //! reachable UI structure and obtain a validated UCR and warnings.
+//! Values that the UCR data types cannot represent are rejected while decoding.
 
 mod model;
 mod scalar;
 
 use std::fmt;
 
-use seruq_ucr::{ElementId, GeometryError, UcrDraft};
+use seruq_ucr::{AssetPathError, ElementId, FontSizeError, GeometryError, UcrDraft};
 
-/// A JSON syntax, representation, or geometry-construction error.
+/// A JSON syntax or representation error, or a value rejected by a UCR data type.
 #[derive(Debug)]
 pub enum Error {
     Json(serde_json::Error),
@@ -18,6 +19,16 @@ pub enum Error {
         element: ElementId,
         field: &'static str,
         reason: GeometryError,
+    },
+    InvalidFontSize {
+        element: ElementId,
+        reason: FontSizeError,
+    },
+    /// `element` is `None` for `metadata.default_font`.
+    InvalidAssetPath {
+        element: Option<ElementId>,
+        field: &'static str,
+        reason: AssetPathError,
     },
 }
 
@@ -33,6 +44,25 @@ impl fmt::Display for Error {
                 formatter,
                 "invalid {field} for element {element}: {reason:?}"
             ),
+            Self::InvalidFontSize { element, reason } => {
+                write!(
+                    formatter,
+                    "invalid font_size for element {element}: {reason:?}"
+                )
+            }
+            Self::InvalidAssetPath {
+                element: Some(element),
+                field,
+                reason,
+            } => write!(
+                formatter,
+                "invalid {field} path for element {element}: {reason:?}"
+            ),
+            Self::InvalidAssetPath {
+                element: None,
+                field,
+                reason,
+            } => write!(formatter, "invalid metadata {field} path: {reason:?}"),
         }
     }
 }
@@ -41,7 +71,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Json(error) => Some(error),
-            Self::InvalidGeometry { .. } => None,
+            _ => None,
         }
     }
 }
@@ -52,9 +82,9 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-/// Decode JSON without validating references, cycles, or font sizes.
+/// Decode JSON without validating references or cycles.
 ///
-/// Point and Size construction constraints are enforced even for unused elements.
+/// Constraints of Point, Size, FontSize, and AssetPath are enforced even for unused elements.
 pub fn from_str(json: &str) -> Result<UcrDraft, Error> {
     let document: model::UcrJson = serde_json::from_str(json)?;
     document.try_into()

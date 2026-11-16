@@ -2,18 +2,23 @@
 //!
 //! Applications own decoding and validation. Pass a validated [`Ucr`] and an
 //! explicit asset base to [`Runtime::new`], then render offscreen or open a window.
+//! The window host requires the default `window` feature.
 
 mod error;
+mod layout;
 mod render;
 mod text;
+#[cfg(feature = "window")]
 mod window;
 
 use std::path::{Path, PathBuf};
 
-use seruq_ucr::Ucr;
+use seruq_ucr::{Applied, ElementId, MutationError, MutationOp, Ucr};
 use tiny_skia::Pixmap;
 
 pub use error::Error;
+pub use layout::{Bounds, Placed};
+#[cfg(feature = "window")]
 pub use window::WindowOptions;
 
 /// Owns a validated document and caches its image and font resources.
@@ -35,6 +40,23 @@ impl Runtime {
         &self.document
     }
 
+    /// Apply a mutation to the document, or leave it unchanged on failure.
+    pub fn apply(&mut self, mutation: &[MutationOp]) -> Result<Applied, MutationError> {
+        self.document.apply(mutation)
+    }
+
+    /// Every reachable element in paint order, in logical coordinates.
+    ///
+    /// Rendering and hit testing both derive from this list.
+    pub fn layout(&self) -> Vec<Placed> {
+        layout::layout(&self.document)
+    }
+
+    /// The frontmost non-Container element at a logical point.
+    pub fn hit_test(&self, x: f64, y: f64) -> Option<ElementId> {
+        layout::hit_test(&self.document, x, y)
+    }
+
     /// Render a physical-pixel viewport without creating a window.
     ///
     /// `scale_factor` converts the document's logical coordinates to pixels.
@@ -44,6 +66,7 @@ impl Runtime {
     }
 
     /// Open a desktop window and display the document. Call from the main thread.
+    #[cfg(feature = "window")]
     pub fn run(self, options: WindowOptions) -> Result<(), Error> {
         window::run(self, options)
     }

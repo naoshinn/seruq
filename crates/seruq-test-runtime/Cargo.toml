@@ -5,15 +5,24 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = ["window"]
+# Desktop window host. Rendering, layout, and hit testing work without it.
+window = ["dep:winit", "dep:softbuffer"]
+
 [dependencies]
 seruq-ucr.workspace = true
-winit.workspace = true
-softbuffer.workspace = true
+winit = { workspace = true, optional = true }
+softbuffer = { workspace = true, optional = true }
 tiny-skia.workspace = true
 cosmic-text.workspace = true
 
 [dev-dependencies]
 seruq-ucr-json.workspace = true
+
+[[example]]
+name = "viewer"
+required-features = ["window"]
 
 [lints]
 workspace = true

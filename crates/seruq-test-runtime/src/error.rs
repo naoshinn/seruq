@@ -36,6 +36,7 @@ pub enum Error {
 }
 
 impl Error {
+    #[cfg(feature = "window")]
     pub(crate) fn window(source: impl std::error::Error + 'static) -> Self {
         Self::Window(Box::new(source))
     }

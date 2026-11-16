@@ -25,6 +25,16 @@ It needs no window or display server. `Frame` exposes its dimensions, RGBA bytes
 and PNG export. `run` consumes the runtime, opens a window, and blocks until it
 closes or an error occurs; call it on the main thread.
 
+`layout` returns every reachable element in paint order with its logical bounds
+and the region left after clipping by its ancestors. Rendering and `hit_test`
+both derive from this list. `hit_test` takes a logical point and returns the
+frontmost element under it; Containers are never hit, and every other element
+type hides what is behind it. `apply` passes a mutation to the document, which
+either applies all of its operations or leaves the document unchanged.
+
+The window host is behind the default `window` feature. Disable default
+features to use rendering, layout, and hit testing without winit and softbuffer.
+
 ## Examples
 
 Run these commands from the workspace root. The examples are clients of the
@@ -59,8 +69,9 @@ either, this runtime uses installed system fonts. Explicit font files use their
 first face, without system-font fallback. Assets are loaded lazily and cached
 for the runtime's lifetime, so changes to those files are not reloaded.
 
-Buttons and text inputs are static visuals. Input events, focus, editing, FFR,
-and mutations are not implemented. Visible `Geometry` elements return an
+Buttons and text inputs are static visuals. Input events, focus, editing, and
+FFR are not implemented, and the window does not redraw after `apply` because
+nothing can call it while `run` is blocking. Visible `Geometry` elements return an
 `UnsupportedElement` error because the current UCR model has no shape data.
 Fully clipped elements are skipped, including their asset loading. Renderer
 coordinate limits can also produce an error for otherwise valid UCR documents.

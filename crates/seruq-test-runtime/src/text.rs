@@ -11,7 +11,7 @@ use cosmic_text::{
 use seruq_ucr::ElementId;
 use tiny_skia::Pixmap;
 
-use crate::{Error, render::Bounds};
+use crate::{Error, layout::Bounds};
 
 pub(crate) struct TextStyle {
     pub element: ElementId,
