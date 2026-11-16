@@ -1,6 +1,7 @@
 use seruq_test_runtime::{Bounds, Placed, Runtime};
 use seruq_ucr::{
     Element, ElementId, ElementKind, FontSize, Metadata, MutationOp, Point, Size, UcrDraft,
+    ValueMap,
 };
 
 fn container(children: &[ElementId]) -> ElementKind {
@@ -31,6 +32,7 @@ fn element(x: f32, y: f32, width: f32, height: f32, kind: ElementKind) -> Elemen
         position: Point::new(x, y).unwrap(),
         size: Size::new(width, height).unwrap(),
         kind,
+        data: ValueMap::new(),
     }
 }
 
@@ -39,6 +41,7 @@ fn runtime(elements: impl IntoIterator<Item = (ElementId, Element)>) -> Runtime 
         metadata: Metadata::new("0.1.0".into(), None),
         root: 0,
         elements: elements.into_iter().collect(),
+        state: ValueMap::new(),
     }
     .build()
     .unwrap();

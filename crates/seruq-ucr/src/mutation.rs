@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, mem};
 
-use crate::{Element, ElementId, ElementKind, Point, Size, Ucr};
+use crate::{Element, ElementId, ElementKind, Point, Size, Ucr, Value, ValueMap};
 
 /// An ordered sequence of changes, applied to a [`Ucr`] as a single unit.
 pub type Mutation = Vec<MutationOp>;
@@ -32,9 +32,21 @@ pub enum MutationOp {
         size: Option<Size>,
         kind: Option<ElementKind>,
     },
+    /// Set one key of the document's `state`, replacing any existing value.
+    SetState { key: String, value: Value },
+    /// Remove one key of the document's `state`. An absent key is not an error.
+    RemoveState { key: String },
+    /// Set one key of an element's `data`, replacing any existing value.
+    SetData {
+        id: ElementId,
+        key: String,
+        value: Value,
+    },
+    /// Remove one key of an element's `data`. An absent key is not an error.
+    RemoveData { id: ElementId, key: String },
 }
 
-/// The elements affected by a successfully applied [`Mutation`].
+/// The elements and state keys affected by a successfully applied [`Mutation`].
 ///
 /// Containers whose `children` changed are not listed unless they were
 /// themselves inserted, moved, or updated.
@@ -43,6 +55,7 @@ pub struct Applied {
     inserted: BTreeSet<ElementId>,
     removed: BTreeSet<ElementId>,
     updated: BTreeSet<ElementId>,
+    state: BTreeSet<String>,
 }
 
 impl Applied {
@@ -56,9 +69,14 @@ impl Applied {
         &self.removed
     }
 
-    /// Surviving elements that were moved or updated.
+    /// Surviving elements that were moved or updated, including changes to their `data`.
     pub fn updated(&self) -> &BTreeSet<ElementId> {
         &self.updated
+    }
+
+    /// Keys of the document's `state` that were set or removed.
+    pub fn state(&self) -> &BTreeSet<String> {
+        &self.state
     }
 }
 
@@ -240,6 +258,26 @@ impl Ucr {
                     applied.updated.insert(id);
                 }
             }
+            MutationOp::SetState { key, value } => {
+                self.data.state.insert(key.clone(), value.clone());
+                applied.state.insert(key.clone());
+            }
+            MutationOp::RemoveState { key } => {
+                if self.data.state.remove(key).is_some() {
+                    applied.state.insert(key.clone());
+                }
+            }
+            MutationOp::SetData { id, key, value } => {
+                self.data_mut(*id)?.insert(key.clone(), value.clone());
+                if !applied.inserted.contains(id) {
+                    applied.updated.insert(*id);
+                }
+            }
+            MutationOp::RemoveData { id, key } => {
+                if self.data_mut(*id)?.remove(key).is_some() && !applied.inserted.contains(id) {
+                    applied.updated.insert(*id);
+                }
+            }
         }
         Ok(())
     }
@@ -251,6 +289,14 @@ impl Ucr {
             Err(MutationErrorReason::Unreachable { id })
         } else {
             Ok(())
+        }
+    }
+
+    fn data_mut(&mut self, id: ElementId) -> Result<&mut ValueMap, MutationErrorReason> {
+        self.check_attached(id)?;
+        match self.data.elements.get_mut(&id) {
+            Some(element) => Ok(&mut element.data),
+            None => Err(MutationErrorReason::ElementNotFound { id }),
         }
     }
 

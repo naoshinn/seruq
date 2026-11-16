@@ -15,5 +15,5 @@ Serde support and JSON-specific types live in this crate. `seruq-ucr` does not
 depend on Serde. The JSON types are implementation details, not a public API.
 
 See the [experimental JSON mapping](../../docs/ucr/v0/json.md) for the data layout,
-ID, number, and asset path representations, and decoding rules. There is no JSON Schema
+ID, number, asset path, and state value representations, and decoding rules. There is no JSON Schema
 yet; the mapping can change during v0 development.

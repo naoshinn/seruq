@@ -8,6 +8,7 @@ use seruq_ucr::{
 use crate::{
     Error,
     scalar::{JsonFloat, JsonId},
+    value::JsonValueMap,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -17,6 +18,8 @@ pub(crate) struct UcrJson {
     root: JsonId,
     #[serde(deserialize_with = "deserialize_elements")]
     elements: BTreeMap<JsonId, ElementJson>,
+    #[serde(default, skip_serializing_if = "JsonValueMap::is_empty")]
+    state: JsonValueMap,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,6 +36,8 @@ struct ElementJson {
     position: PointJson,
     size: SizeJson,
     kind: ElementKindJson,
+    #[serde(default, skip_serializing_if = "JsonValueMap::is_empty")]
+    data: JsonValueMap,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -105,10 +110,12 @@ impl From<&UcrDraft> for UcrJson {
                                 height: JsonFloat(element.size.height()),
                             },
                             kind: (&element.kind).into(),
+                            data: JsonValueMap(element.data.clone()),
                         },
                     )
                 })
                 .collect(),
+            state: JsonValueMap(draft.state.clone()),
         }
     }
 }
@@ -142,6 +149,7 @@ impl TryFrom<UcrJson> for UcrDraft {
                             position,
                             size,
                             kind: element.kind.into_kind(id.0)?,
+                            data: element.data.0,
                         },
                     ))
                 })
@@ -157,6 +165,7 @@ impl TryFrom<UcrJson> for UcrDraft {
             metadata: Metadata::new(document.metadata.version, default_font),
             root: document.root.0,
             elements,
+            state: document.state.0,
         })
     }
 }

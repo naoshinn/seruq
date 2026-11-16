@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{AssetPath, FontSize, Point, Size};
+use crate::{AssetPath, FontSize, Point, Size, ValueMap};
 
 pub type ElementId = u64;
 
@@ -9,6 +9,8 @@ pub struct UcrDraft {
     pub metadata: Metadata,
     pub root: ElementId,
     pub elements: HashMap<ElementId, Element>,
+    /// Application data that belongs to no particular element.
+    pub state: ValueMap,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,6 +41,8 @@ pub struct Element {
     pub position: Point,
     pub size: Size,
     pub kind: ElementKind,
+    /// Application data that lives and dies with this element.
+    pub data: ValueMap,
 }
 
 #[derive(Debug, Clone, PartialEq)]

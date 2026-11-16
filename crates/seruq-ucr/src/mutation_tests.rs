@@ -1,11 +1,15 @@
 use super::{MutationError, MutationErrorReason, MutationOp};
-use crate::{Element, ElementId, ElementKind, FontSize, Metadata, Point, Size, Ucr, UcrDraft};
+use crate::{
+    Element, ElementId, ElementKind, FontSize, Metadata, Point, Size, Ucr, UcrDraft, Value,
+    ValueMap,
+};
 
 fn element(kind: ElementKind) -> Element {
     Element {
         position: Point::new(0.0, 0.0).unwrap(),
         size: Size::new(100.0, 100.0).unwrap(),
         kind,
+        data: ValueMap::new(),
     }
 }
 
@@ -47,6 +51,7 @@ fn ucr() -> Ucr {
         .into_iter()
         .map(|(id, kind)| (id, element(kind)))
         .collect(),
+        state: ValueMap::from([("count".to_owned(), Value::from(3))]),
     }
     .build()
     .unwrap()
@@ -443,5 +448,181 @@ fn failure_discards_earlier_operations() {
         ],
         3,
         MutationErrorReason::ElementNotFound { id: 4 },
+    );
+}
+
+fn set_state(key: &str, value: impl Into<Value>) -> MutationOp {
+    MutationOp::SetState {
+        key: key.into(),
+        value: value.into(),
+    }
+}
+
+fn set_data(id: ElementId, key: &str, value: impl Into<Value>) -> MutationOp {
+    MutationOp::SetData {
+        id,
+        key: key.into(),
+        value: value.into(),
+    }
+}
+
+fn keys(applied: &super::Applied) -> Vec<&str> {
+    applied.state().iter().map(String::as_str).collect()
+}
+
+#[test]
+fn set_state_adds_and_replaces_keys() {
+    let mut ucr = ucr();
+    let applied = ucr
+        .apply(&[set_state("count", 4), set_state("filter", "all")])
+        .unwrap();
+    assert_eq!(ucr.data().state["count"], Value::from(4));
+    assert_eq!(ucr.data().state["filter"], Value::from("all"));
+    assert_eq!(ucr.data().state.len(), 2);
+    assert_eq!(keys(&applied), ["count", "filter"]);
+    assert!(applied.updated().is_empty());
+    assert_consistent(&ucr);
+}
+
+#[test]
+fn remove_state_ignores_absent_keys() {
+    let mut ucr = ucr();
+    let applied = ucr
+        .apply(&[
+            MutationOp::RemoveState {
+                key: "missing".into(),
+            },
+            MutationOp::RemoveState {
+                key: "count".into(),
+            },
+        ])
+        .unwrap();
+    assert!(ucr.data().state.is_empty());
+    assert_eq!(keys(&applied), ["count"]);
+}
+
+#[test]
+fn later_operations_see_earlier_state_changes() {
+    let mut ucr = ucr();
+    ucr.apply(&[
+        set_state("count", 4),
+        MutationOp::RemoveState {
+            key: "count".into(),
+        },
+        set_state("count", 5),
+    ])
+    .unwrap();
+    assert_eq!(ucr.data().state["count"], Value::from(5));
+}
+
+#[test]
+fn set_data_changes_only_the_target_element() {
+    let mut ucr = ucr();
+    let applied = ucr
+        .apply(&[
+            set_data(2, "item_id", 7),
+            set_data(2, "done", true),
+            set_data(0, "title", "root"),
+            set_data(2, "item_id", 8),
+        ])
+        .unwrap();
+    let elements = &ucr.data().elements;
+    assert_eq!(elements[&2].data["item_id"], Value::from(8));
+    assert_eq!(elements[&2].data["done"], Value::from(true));
+    assert_eq!(elements[&0].data["title"], Value::from("root"));
+    assert!(elements[&3].data.is_empty());
+    assert_eq!(
+        applied.updated().iter().copied().collect::<Vec<_>>(),
+        [0, 2]
+    );
+    assert!(applied.state().is_empty());
+    assert_consistent(&ucr);
+}
+
+#[test]
+fn remove_data_ignores_absent_keys() {
+    let mut ucr = ucr();
+    ucr.apply(&[set_data(2, "done", true)]).unwrap();
+    let applied = ucr
+        .apply(&[
+            MutationOp::RemoveData {
+                id: 3,
+                key: "done".into(),
+            },
+            MutationOp::RemoveData {
+                id: 2,
+                key: "done".into(),
+            },
+        ])
+        .unwrap();
+    assert!(ucr.data().elements[&2].data.is_empty());
+    assert_eq!(applied.updated().iter().copied().collect::<Vec<_>>(), [2]);
+}
+
+#[test]
+fn data_is_inserted_and_removed_with_its_element() {
+    let mut ucr = ucr();
+    let mut row = element(text("5"));
+    row.data.insert("item_id".into(), Value::from(5));
+    let applied = ucr
+        .apply(&[
+            MutationOp::Insert {
+                id: 5,
+                element: row,
+                parent: 0,
+                index: 0,
+            },
+            set_data(5, "done", false),
+        ])
+        .unwrap();
+    assert_eq!(ucr.data().elements[&5].data.len(), 2);
+    // Changes to an element inserted by the same mutation are part of its insertion.
+    assert!(applied.updated().is_empty());
+
+    ucr.apply(&[MutationOp::Remove { id: 5 }]).unwrap();
+    assert!(!ucr.data().elements.contains_key(&5));
+    assert_consistent(&ucr);
+}
+
+#[test]
+fn update_keeps_data() {
+    let mut ucr = ucr();
+    ucr.apply(&[set_data(2, "item_id", 7), update_kind(2, text("changed"))])
+        .unwrap();
+    assert_eq!(ucr.data().elements[&2].data["item_id"], Value::from(7));
+}
+
+#[test]
+fn data_operations_reject_invalid_targets() {
+    assert_rejected(
+        &[set_data(8, "key", 1)],
+        0,
+        MutationErrorReason::ElementNotFound { id: 8 },
+    );
+    assert_rejected(
+        &[set_data(9, "key", 1)],
+        0,
+        MutationErrorReason::Unreachable { id: 9 },
+    );
+    assert_rejected(
+        &[MutationOp::RemoveData {
+            id: 8,
+            key: "key".into(),
+        }],
+        0,
+        MutationErrorReason::ElementNotFound { id: 8 },
+    );
+}
+
+#[test]
+fn failure_discards_state_and_data_changes() {
+    assert_rejected(
+        &[
+            set_state("count", 4),
+            set_data(2, "done", true),
+            MutationOp::Remove { id: 0 },
+        ],
+        2,
+        MutationErrorReason::TargetsRoot,
     );
 }

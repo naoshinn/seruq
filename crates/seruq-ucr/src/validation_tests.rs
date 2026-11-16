@@ -1,6 +1,6 @@
 use super::{Element, ElementId, ElementKind, Metadata, UcrDraft};
 use crate::validate::{ValidationError, ValidationWarning};
-use crate::{AssetPath, FontSize, Point, Size};
+use crate::{AssetPath, FontSize, Point, Size, ValueMap};
 
 fn draft(
     root: ElementId,
@@ -21,10 +21,12 @@ fn draft(
                         position: Point::new(0.0, 0.0).unwrap(),
                         size: Size::new(100.0, 100.0).unwrap(),
                         kind,
+                        data: ValueMap::new(),
                     },
                 )
             })
             .collect(),
+        state: ValueMap::new(),
     }
 }
 

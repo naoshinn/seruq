@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use seruq_ucr::{Element, ElementKind, FontSize, Metadata, Point, Size, UcrDraft};
+use seruq_ucr::{Element, ElementKind, FontSize, Metadata, Point, Size, UcrDraft, ValueMap};
 
 fn main() {
     let ucr = UcrDraft {
@@ -18,10 +18,12 @@ fn main() {
                         font_size: FontSize::new(11.0).unwrap(),
                         font: None,
                     },
+                    data: ValueMap::new(),
                 },
             );
             elements
         },
+        state: ValueMap::new(),
     };
 
     let json = seruq_ucr_json::to_string_pretty(&ucr).unwrap();

@@ -6,6 +6,7 @@
 
 mod model;
 mod scalar;
+mod value;
 
 use std::fmt;
 

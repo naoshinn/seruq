@@ -1,6 +1,6 @@
 use seruq_ucr::{
-    AssetPath, AssetPathError, ElementKind, FontSizeError, GeometryError, ValidationError,
-    ValidationWarning,
+    AssetPath, AssetPathError, ElementKind, FontSizeError, GeometryError, Number, ValidationError,
+    ValidationWarning, Value, ValueMap,
 };
 use seruq_ucr_json::{Error, from_str, to_string, to_string_pretty};
 
@@ -389,4 +389,119 @@ fn reports_location_of_invalid_asset_paths() {
             reason: AssetPathError::Empty,
         })
     ));
+}
+
+const STATEFUL: &str = r#"{
+  "metadata": {
+    "version": "0.1.0"
+  },
+  "root": "0",
+  "elements": {
+    "0": {
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "size": {
+        "width": 1.0,
+        "height": 1.0
+      },
+      "kind": {
+        "type": "geometry"
+      },
+      "data": {
+        "done": false,
+        "item_id": 1.0
+      }
+    }
+  },
+  "state": {
+    "": "empty key",
+    "filter": "all",
+    "nested": {
+      "list": [
+        true,
+        -0.5,
+        "text",
+        [],
+        {}
+      ]
+    },
+    "next_id": 3.0
+  }
+}"#;
+
+#[test]
+fn state_and_data_round_trip() {
+    let draft = from_str(STATEFUL).unwrap();
+    assert_eq!(draft.state["next_id"], Value::from(3));
+    assert_eq!(draft.state["filter"], Value::from("all"));
+    assert_eq!(
+        draft.state["nested"].as_map().unwrap()["list"],
+        Value::from(vec![
+            Value::from(true),
+            Value::from(Number::new(-0.5).unwrap()),
+            Value::from("text"),
+            Value::from(Vec::new()),
+            Value::from(ValueMap::new()),
+        ])
+    );
+    assert_eq!(draft.elements[&0].data["done"], Value::from(false));
+    assert_eq!(draft.elements[&0].data["item_id"], Value::from(1));
+    assert_eq!(to_string_pretty(&draft).unwrap(), STATEFUL);
+    assert_eq!(from_str(&to_string(&draft).unwrap()).unwrap(), draft);
+}
+
+#[test]
+fn absent_and_empty_state_and_data_are_equivalent() {
+    let absent = from_str(&element(r#"{"type":"geometry"}"#)).unwrap();
+    assert!(absent.state.is_empty());
+    assert!(absent.elements[&0].data.is_empty());
+
+    let empty = r#"{"metadata":{"version":"0.1.0"},"root":"0","state":{},"elements":{"0":
+        {"position":{"x":0,"y":0},"size":{"width":1,"height":1},"kind":{"type":"geometry"},"data":{}}}}"#;
+    assert_eq!(from_str(empty).unwrap(), absent);
+
+    let json = to_string(&absent).unwrap();
+    assert!(!json.contains(r#""state""#) && !json.contains(r#""data""#));
+}
+
+#[test]
+fn state_numbers_use_f64() {
+    let json = r#"{"metadata":{"version":"0.1.0"},"root":"0","elements":{},
+        "state":{"a":0.1,"b":9007199254740993,"c":-1e308,"d":1}"#
+        .to_owned()
+        + "}";
+    let draft = from_str(&json).unwrap();
+    assert_eq!(draft.state["a"].as_number(), Some(0.1));
+    assert_eq!(draft.state["b"].as_number(), Some(9_007_199_254_740_992.0));
+    assert_eq!(draft.state["c"].as_number(), Some(-1e308));
+    assert_eq!(draft.state["d"].as_number(), Some(1.0));
+    assert_eq!(from_str(&to_string(&draft).unwrap()).unwrap(), draft);
+}
+
+#[test]
+fn rejects_invalid_state_and_data_values() {
+    let state = |state: &str| {
+        format!(
+            r#"{{"metadata":{{"version":"0.1.0"}},"root":"0","elements":{{}},"state":{state}}}"#
+        )
+    };
+    for value in [
+        r#"{"a":null}"#,
+        r#"{"a":[null]}"#,
+        r#"{"a":{"b":null}}"#,
+        r#"{"a":1e999}"#,
+        r#"{"a":1,"a":2}"#,
+        r#"{"a":{"b":1,"b":1}}"#,
+        r#"{"a":[{"b":1,"b":1}]}"#,
+        "null",
+        "[]",
+        r#""text""#,
+    ] {
+        assert_json_error(&state(value));
+        assert_json_error(&document(&format!(
+            r#"{{"position":{{"x":0,"y":0}},"size":{{"width":1,"height":1}},"kind":{{"type":"geometry"}},"data":{value}}}"#
+        )));
+    }
 }
