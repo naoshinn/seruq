@@ -3,30 +3,32 @@
 This document describes the JSON mapping implemented by `seruq-ucr-json` for the
 current Rust model. It is a draft, not a stable storage format or a complete mapping
 of every feature proposed in the [UCR v0 specification](README.md).
-Actions, colors, and Geometry drawing data are not implemented yet. There is no
+Actions, colors, Geometry drawing data, and Mutations are not implemented yet. There is no
 JSON Schema at this stage.
 
 ## Document Structure
 
-A document is a UTF-8 JSON object with three required fields:
+A document is a UTF-8 JSON object with three required fields and one optional field:
 
 | Field | JSON representation |
 | --- | --- |
 | `metadata` | Object with a required string `version` and optional asset path `default_font` |
 | `root` | Element ID string |
 | `elements` | Object mapping Element ID strings to Element objects |
+| `state` | Optional object mapping strings to [values](#state-and-data-values) |
 
 The codec preserves `metadata.version` as an opaque string. It does not currently
 reject unknown UCR versions, infer migrations, or equate this value with the Rust
 crate version. Version compatibility checks remain to be defined.
 
-Each Element object has three required fields:
+Each Element object has three required fields and one optional field:
 
 | Field | JSON representation |
 | --- | --- |
 | `position` | Object with numeric `x` and `y` |
 | `size` | Object with numeric `width` and `height` |
 | `kind` | Object identified by a required string `type` |
+| `data` | Optional object mapping strings to [values](#state-and-data-values) |
 
 The `type` field selects the following attributes inside `kind`:
 
@@ -84,11 +86,46 @@ has no UI meaning; `children` retains its original order.
 
 ## Floating-Point Values
 
-Every number is a finite f32 encoded as a JSON number. The decoder rounds numbers to f32
+Every number outside `state` and `data` is a finite f32 encoded as a JSON number. The decoder rounds numbers to f32
 and rejects numbers that overflow to infinity. Negative zero is preserved by the Rust codec.
 
 NaN and infinities have no JSON representation, because no UCR value can hold them.
 Strings such as `"NaN"` and numeric strings such as `"16"` are rejected.
+
+## State and Data Values
+
+Values in `state` and `data` use the corresponding JSON types:
+
+| Value | JSON representation |
+| --- | --- |
+| Bool | `true` or `false` |
+| Number | JSON number, decoded as a finite f64 |
+| String | String |
+| Sequence | Array of values |
+| Map | Object mapping strings to values |
+
+`null` is rejected everywhere inside `state` and `data`, as are numbers that overflow
+to infinity. Integers beyond 2^53 round to the nearest f64; store such identifiers as
+strings. Duplicate keys in any object are rejected. An absent `state` or `data` and an
+empty object are equivalent, and writers omit them when empty. Writers emit keys in
+code point order; the order has no meaning.
+
+```json
+{
+  "state": { "next_id": 3, "filter": "all" },
+  "elements": {
+    "7": {
+      "position": { "x": 0, "y": 40 },
+      "size": { "width": 320, "height": 32 },
+      "kind": { "type": "container", "children": [] },
+      "data": { "item_id": 2, "done": false, "tags": ["home"] }
+    }
+  }
+}
+```
+
+This excerpt omits `metadata` and `root`. Unlike optional attributes, `state` and `data`
+cannot be `null`.
 
 ## Asset Paths
 

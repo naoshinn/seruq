@@ -16,6 +16,10 @@ Responsibilities are divided as follows:
 | Runtime | Handle rendering, clipping, input, and event delivery |
 | Application / DSL | Compute layout, run external logic, and decide whether to apply Mutations |
 
+UCR is a low-level representation. It contains what a runtime must interpret and what functions,
+possibly written in different languages, must share. Conveniences for authors, such as layout,
+typed records, and bindings between data and presentation, belong to the DSLs and libraries that produce UCR.
+
 The first specification uses absolute positioning and has no layout engine.
 An element's region is always the `position` and `size` stored in UCR; content never changes it.
 Applications handle layout changes when the viewport size changes, using the
@@ -24,7 +28,7 @@ and the [ViewportResized event](#5-events-and-ffr).
 
 ## 2. Abstract Data Model
 
-UCR contains metadata, a reference to a single root, and a Map from IDs to Elements.
+UCR contains metadata, a reference to a single root, a Map from IDs to Elements, and application state.
 The Map's iteration order has no visual meaning.
 
 In the notation below, `Map<K, V>` is a collection keyed by unique values of type `K`,
@@ -35,7 +39,8 @@ These describe the abstract model, not particular programming-language types or 
 UCR = {
     metadata: Metadata,
     root: ElementId,
-    elements: Map<ElementId, Element>
+    elements: Map<ElementId, Element>,
+    state: Map<String, Value>
 }
 
 Element = Container | Text | Image | Button | TextInput | Geometry
@@ -43,7 +48,8 @@ Element = Container | Text | Image | Button | TextInput | Geometry
 Common Element fields = {
     position: { x: LogicalNumber, y: LogicalNumber },
     size: { width: LogicalNumber, height: LogicalNumber },
-    actions: Map<Timing, FfrCall>
+    actions: Map<Timing, FfrCall>,
+    data: Map<String, Value>
 }
 
 Container-specific fields = {
@@ -94,6 +100,37 @@ and the runtime renders the updated document. The call description itself does n
 The current experimental UCR JSON ID encoding is described in the [JSON mapping](json.md).
 ID encoding in UCR Binary remains unspecified.
 Rules for assigning new IDs when duplicating independent elements and updating related references must also be defined.
+
+### 2.2. State and Data
+
+UCR is the source of truth for an application's state, not only for its appearance.
+Functions called through FFR read the UCR and return Mutations; they share data with each other through the UCR.
+Two places hold application data, and neither affects rendering, placement, or hit testing:
+
+| Place | Holds | Lifetime |
+| --- | --- | --- |
+| `state` of the UCR | Values that belong to no particular element, such as a counter or the current mode | Until removed explicitly |
+| `data` of an Element | Values tied to that element, such as the record a row presents | Removed together with the element |
+
+Both are optional and their absence means an empty map. An element's `data` also serves as the fixed
+arguments of its actions: a function finds the event's target and reads its `data`.
+
+```text
+Value = Bool | Number | String | Sequence<Value> | Map<String, Value>
+Number = finite IEEE 754 binary64
+```
+
+- There is no null. A value that is not present is a key that is not present.
+- There is one numeric type. Integers are exact up to 2^53; larger identifiers, including ElementIds, are stored as strings.
+- Keys are arbitrary strings and are unique within a map. The order of keys has no meaning.
+- NaN and infinities produce `InvalidValue`. Like other data type constraints, this applies to the entire document.
+
+UCR has no record types and no schema for `state` or `data`. Languages map their own types, such as structs or classes,
+to and from Map values. A value that does not have the shape a function expects is that function's failure,
+not a validation error. UCR also does not connect state to presentation: a function that changes a displayed value
+returns a Mutation that changes both the state and the elements that show it.
+
+Details still to be specified: Limits on nesting depth and size, and whether a schema can be attached later as an additional constraint.
 
 ## 3. Coordinates, Sizes, and Drawing Order
 
@@ -352,7 +389,7 @@ The ValueChanged payload contains the new string value.
 The first specification proposes synchronous FFR calls: a function receives an Event and returns a Mutation.
 
 Details still to be specified: The final supported event set, event ordering, cancellation notifications,
-FFR failure and asynchronous execution, fixed arguments, unknown `function_name` values,
+FFR failure and asynchronous execution, unknown `function_name` values,
 and behavior when no action is configured. The event argument structure also needs to be finalized from the proposal above.
 
 Native data types can be used for passing Mutations, so normal execution does not require encoding and decoding every update.
@@ -368,6 +405,10 @@ Operation = Insert { id: ElementId, element: Element, parent: ElementId, index: 
           | Remove { id: ElementId }
           | Move   { id: ElementId, parent: ElementId, index: Integer }
           | Update { id: ElementId, position?, size?, attributes? }
+          | SetState    { key: String, value: Value }
+          | RemoveState { key: String }
+          | SetData     { id: ElementId, key: String, value: Value }
+          | RemoveData  { id: ElementId, key: String }
 ```
 
 | Operation | Effect |
@@ -375,7 +416,11 @@ Operation = Insert { id: ElementId, element: Element, parent: ElementId, index: 
 | Insert | Add a new element to the `children` of `parent` at `index` |
 | Remove | Remove an element and all of its descendants from the Map |
 | Move | Detach an element and insert it into the `children` of `parent` at `index`, counted after detaching |
-| Update | Replace the given position, size, or type-specific attributes of an element |
+| Update | Replace the given position, size, or type-specific attributes of an element; `data` is unchanged |
+| SetState | Set one key of the UCR's `state`, replacing any existing value |
+| RemoveState | Remove one key of the UCR's `state` |
+| SetData | Set one key of an element's `data`, replacing any existing value |
+| RemoveData | Remove one key of an element's `data` |
 
 Application rules:
 
@@ -388,6 +433,11 @@ Application rules:
   - Move fails if `parent` is the element itself or one of its descendants.
   - Update cannot change an element's type, and cannot replace a Container's `children`.
   - Every operation fails if it names an element that does not exist or is not reachable from the root.
+  - RemoveState and RemoveData have no effect when the key is absent; this is not a failure.
+- SetState and SetData replace the whole value of a key. Changing part of a Sequence or Map means setting the key again.
+- A function that reads the UCR and returns a Mutation relies on the UCR not changing in between.
+  Mutations are therefore applied before the next event is processed, and work that completes later
+  re-enters as a new function call that reads the current UCR, rather than as a Mutation computed from an old one.
 - A Mutation never creates unreachable elements. An ID freed by Remove can be reused by a later Insert.
 - New IDs are chosen by the producer of the Mutation. A collision with any existing ID, including an unreachable element's, is a failure.
 
@@ -485,6 +535,7 @@ The following areas need defined behavior before independent implementations can
 4. Geometry path, fill, and stroke rules.
 5. Events supported by each Element, their ordering, and the FFR failure contract.
 6. The file formats of conformance test cases, and an encoding of Mutations.
+7. Limits on the size and nesting depth of `state` and `data`.
 
 The document also leaves Binary ID encoding, Color representation, diagnostic types, and the Binary layout unspecified.
 These gaps and the proposed designs need to be resolved before v1 is published as an official specification.
