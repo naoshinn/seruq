@@ -359,6 +359,36 @@ Activated is a single activation event and has no corresponding Unactivated even
 It can also be used when activating a Button through a keyboard or console.
 A canceled press does not produce Activated.
 
+### 5.2. Pressing a Button
+
+The proposed behavior of a press with a pointer's primary button, in logical coordinates:
+
+1. A press starts when the pointer is pressed and the [hit-test](#31-placed-list-and-hit-testing) target is a Button.
+   The Button receives Pushed. Pressing anything else starts no press, including a Button hidden by another element.
+2. While the press is in progress, moving the pointer produces no events, and no other press can start.
+3. When the pointer is released, the Button receives Released. If the hit-test target at the release point
+   is still that Button, it then receives Activated.
+4. A press is canceled when the runtime can no longer follow it, for example when the window loses focus.
+   The Button receives Released and no Activated.
+
+Consequences of these rules:
+
+- Every Pushed is followed by exactly one Released for the same Button, unless the Button is removed first.
+- Activation depends only on where the pointer is released. Leaving the Button, or the viewport, and returning before
+  the release still activates it. Releasing over a part of the Button that is clipped or covered does not.
+- Released and Activated come from one input. They are still processed one at a time: if the Mutation returned for
+  Released removes the Button, Activated is discarded like any other Event whose target no longer exists.
+- If a Mutation removes the pressed Button, the press ends without further events. Reusing the removed Button's ID
+  in the same Mutation does not continue the press.
+- If a Mutation moves the pressed Button, the press continues; whether it activates is decided by the hit test at release.
+- These Events are produced whether or not the Button has actions.
+
+A runtime may draw a Button differently while it is pressed and the pointer is over it. That appearance is
+temporary runtime state: it is not stored in UCR and is not part of the placed list.
+
+Details still to be specified: Presses with other pointer buttons, touch, and multiple pointers,
+activation by keyboard, and the appearance of the pressed state.
+
 `actions` maps Timing values to FFR calls.
 Functions return UCR Mutations, which the application decides whether to apply and then applies.
 Functions do not normally modify UCR directly.
@@ -414,8 +444,8 @@ whose `function_name` has no connected function, so that missing functions are f
 
 The first specification proposes synchronous FFR calls: a function receives an Event and returns a Mutation.
 
-Details still to be specified: The final supported event set, event ordering, cancellation notifications,
-asynchronous execution, the syntax of `function_name`, how failures are delivered to the application,
+Details still to be specified: The final supported event set, the ordering of focus and value events,
+a separate cancellation notification, asynchronous execution, the syntax of `function_name`, how failures are delivered to the application,
 and whether an action on an element type that never produces its Timing is a validation warning.
 
 Native data types can be used for passing Mutations, so normal execution does not require encoding and decoding every update.
@@ -563,7 +593,7 @@ The following areas need defined behavior before independent implementations can
 2. Shaping and tolerance in text measurement, and Image fitting and placement.
 3. TextInput editing state and its relationship to Mutation application.
 4. Geometry path, fill, and stroke rules.
-5. Events supported by each Element, their ordering, and how FFR failures are delivered.
+5. Focus and value events, keyboard and touch input, and how FFR failures are delivered.
 6. The file formats of conformance test cases, and an encoding of Mutations.
 7. Limits on the size and nesting depth of `state` and `data`.
 

@@ -25,5 +25,9 @@ seruq-ucr-json.workspace = true
 name = "viewer"
 required-features = ["window"]
 
+[[example]]
+name = "counter"
+required-features = ["window"]
+
 [lints]
 workspace = true

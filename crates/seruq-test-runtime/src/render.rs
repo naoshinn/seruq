@@ -44,6 +44,7 @@ impl Renderer {
         width: u32,
         height: u32,
         scale: f64,
+        pressed: Option<ElementId>,
     ) -> Result<Frame, Error> {
         if !scale.is_finite() || scale <= 0.0 {
             return Err(Error::InvalidScaleFactor(scale));
@@ -107,7 +108,12 @@ impl Renderer {
                     font_size,
                     font,
                 } => {
-                    draw_control(&mut pixmap, bounds, clip, scale);
+                    let background = if pressed == Some(id) {
+                        Color::from_rgba8(208, 208, 208, 255)
+                    } else {
+                        Color::WHITE
+                    };
+                    draw_control(&mut pixmap, bounds, clip, scale, background);
                     self.text.draw(
                         &mut pixmap,
                         label,
@@ -131,7 +137,7 @@ impl Renderer {
                     font,
                     placeholder,
                 } => {
-                    draw_control(&mut pixmap, bounds, clip, scale);
+                    draw_control(&mut pixmap, bounds, clip, scale, Color::WHITE);
                     let text = if value.is_empty() {
                         placeholder.as_deref().unwrap_or("")
                     } else {
@@ -232,7 +238,7 @@ fn fill_rect(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, color: Color) {
     }
 }
 
-fn draw_control(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, scale: f64) {
+fn draw_control(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, scale: f64, background: Color) {
     fill_rect(pixmap, bounds, clip, Color::BLACK);
-    fill_rect(pixmap, bounds.inset(scale), clip, Color::WHITE);
+    fill_rect(pixmap, bounds.inset(scale), clip, background);
 }
