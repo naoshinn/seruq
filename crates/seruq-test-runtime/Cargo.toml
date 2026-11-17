@@ -26,7 +26,7 @@ name = "viewer"
 required-features = ["window"]
 
 [[example]]
-name = "counter"
+name = "interactive_counter"
 required-features = ["window"]
 
 [lints]

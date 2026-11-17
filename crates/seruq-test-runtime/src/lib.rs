@@ -14,6 +14,7 @@ mod input;
 mod layout;
 mod render;
 mod text;
+mod viewport;
 #[cfg(feature = "window")]
 mod window;
 
@@ -25,6 +26,7 @@ use tiny_skia::Pixmap;
 pub use error::Error;
 pub use input::Input;
 pub use layout::{Bounds, Placed};
+pub use viewport::{RuntimeEvent, Viewport};
 #[cfg(feature = "window")]
 pub use window::WindowOptions;
 
@@ -33,6 +35,7 @@ pub struct Runtime {
     document: Ucr,
     renderer: render::Renderer,
     interaction: input::Interaction,
+    viewport: Option<Viewport>,
 }
 
 impl Runtime {
@@ -42,11 +45,35 @@ impl Runtime {
             document,
             renderer: render::Renderer::new(asset_base.into()),
             interaction: input::Interaction::default(),
+            viewport: None,
         }
     }
 
     pub fn document(&self) -> &Ucr {
         &self.document
+    }
+
+    /// Last viewport supplied by the host, independent of the document's root size.
+    pub fn viewport(&self) -> Option<Viewport> {
+        self.viewport
+    }
+
+    /// Supply physical dimensions and scale, returning an event on the first call
+    /// or a change. Zero dimensions are allowed when minimized. Invalid input
+    /// leaves the previous viewport unchanged. This never changes the document.
+    /// Offscreen hosts explicitly deliver the returned event before rendering.
+    pub fn resize(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale_factor: f64,
+    ) -> Result<Option<RuntimeEvent>, Error> {
+        let viewport = Viewport::new(width, height, scale_factor)?;
+        if self.viewport == Some(viewport) {
+            return Ok(None);
+        }
+        self.viewport = Some(viewport);
+        Ok(Some(RuntimeEvent::ViewportResized(viewport)))
     }
 
     /// Apply a mutation to the document, or leave it unchanged on failure.
@@ -111,7 +138,23 @@ impl Runtime {
     pub fn run_with(
         self,
         options: WindowOptions,
-        handler: impl FnMut(&mut Runtime, Event),
+        mut handler: impl FnMut(&mut Runtime, Event),
+    ) -> Result<(), Error> {
+        self.run_with_events(options, move |runtime, event| {
+            if let RuntimeEvent::Element(event) = event {
+                handler(runtime, event);
+            }
+        })
+    }
+
+    /// Open a window and deliver element and viewport events. The initial viewport
+    /// is delivered before the first frame; later changes precede their frame.
+    /// Apply layout mutations here in response to `ViewportResized`.
+    #[cfg(feature = "window")]
+    pub fn run_with_events(
+        self,
+        options: WindowOptions,
+        handler: impl FnMut(&mut Runtime, RuntimeEvent),
     ) -> Result<(), Error> {
         window::run(self, options, handler)
     }

@@ -7,9 +7,9 @@
 use std::{error::Error, io, path::PathBuf};
 
 use seruq_ffr::{FunctionError, Functions, call, unresolved};
-use seruq_test_runtime::{Input, Runtime, WindowOptions};
+use seruq_test_runtime::{Input, Runtime, RuntimeEvent, Viewport, WindowOptions};
 use seruq_ucr::{
-    ElementId, ElementKind, Event, FontSize, Mutation, MutationOp, Number, Ucr, Value,
+    ElementId, ElementKind, Event, FontSize, Mutation, MutationOp, Number, Point, Size, Ucr, Value,
 };
 
 const LABEL: ElementId = 1;
@@ -68,6 +68,40 @@ fn handle(runtime: &mut Runtime, functions: &mut Functions, event: Event) {
     }
 }
 
+/// Layout belongs to the application: wrap controls when the viewport is narrow.
+fn layout(runtime: &mut Runtime, viewport: Viewport) -> Result<(), Box<dyn Error>> {
+    let width = viewport.width.min(f64::from(f32::MAX)) as f32;
+    let height = viewport.height.min(f64::from(f32::MAX)) as f32;
+    let columns = (((width - 48.0) / 112.0).floor() as usize).clamp(1, 3);
+    let mut mutation = vec![
+        MutationOp::Update {
+            id: runtime.document().data().root,
+            position: None,
+            size: Some(Size::new(width, height)?),
+            kind: None,
+        },
+        MutationOp::Update {
+            id: LABEL,
+            position: None,
+            size: Some(Size::new((width - 48.0).max(0.0), 40.0)?),
+            kind: None,
+        },
+    ];
+    for (index, id) in [2, 3, 4].into_iter().enumerate() {
+        mutation.push(MutationOp::Update {
+            id,
+            position: Some(Point::new(
+                24.0 + (index % columns) as f32 * 112.0,
+                80.0 + (index / columns) as f32 * 60.0,
+            )?),
+            size: None,
+            kind: None,
+        });
+    }
+    runtime.apply(&mutation)?;
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args_os().skip(1);
     let output = args.next().map(PathBuf::from);
@@ -99,6 +133,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     if let Some(output) = output {
+        if let Some(RuntimeEvent::ViewportResized(viewport)) =
+            runtime.resize(options.width, options.height, 1.0)?
+        {
+            layout(&mut runtime, viewport)?;
+        }
         // Without a window: click "+10" twice and "+1" once, then hold "Reset".
         for (x, y, release) in [
             (180.0, 100.0, true),
@@ -125,9 +164,51 @@ fn main() -> Result<(), Box<dyn Error>> {
             output.display()
         );
     } else {
-        runtime.run_with(options, move |runtime, event| {
-            handle(runtime, &mut functions, event)
+        runtime.run_with_events(options, move |runtime, event| match event {
+            RuntimeEvent::Element(event) => handle(runtime, &mut functions, event),
+            RuntimeEvent::ViewportResized(viewport) => {
+                if let Err(error) = layout(runtime, viewport) {
+                    eprintln!("{error}");
+                }
+            }
         })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn narrow_layout_wraps_buttons_and_keeps_actions_working() {
+        let draft = seruq_ucr_json::from_str(include_str!("counter.json")).unwrap();
+        let (document, _) = draft.build().unwrap();
+        let mut runtime = Runtime::new(document, ".");
+        let mut functions = functions();
+        for (width, height, x, y, expected) in [
+            (240, 300, 30.0, 150.0, 10.0),
+            (640, 480, 150.0, 100.0, 20.0),
+        ] {
+            let Some(RuntimeEvent::ViewportResized(viewport)) =
+                runtime.resize(width, height, 1.0).unwrap()
+            else {
+                panic!("missing viewport event")
+            };
+            layout(&mut runtime, viewport).unwrap();
+            assert_eq!(runtime.hit_test(x, y), Some(3));
+            for input in [
+                Input::PointerPressed { x, y },
+                Input::PointerReleased { x, y },
+            ] {
+                for event in runtime.handle_input(input) {
+                    handle(&mut runtime, &mut functions, event);
+                }
+            }
+            assert_eq!(
+                runtime.document().data().state["count"].as_number(),
+                Some(expected)
+            );
+        }
+    }
 }

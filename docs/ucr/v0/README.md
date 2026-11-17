@@ -355,6 +355,13 @@ These timings belong to elements. The proposal adds one document-level event tha
 The runtime delivers ViewportResized to the application, which can respond with a Mutation that repositions elements.
 It is also delivered once before the first rendering. Where a document stores the FFR call for this event is unresolved.
 
+The experimental Rust runtime exposes this through a host-level `RuntimeEvent`, separate from
+an element's `Event`. Its window callback receives logical dimensions and scale before the first
+frame and before a frame using a changed viewport. Identical notifications are suppressed;
+zero dimensions can be reported while minimized. A recreated window receives an initial notification
+again. Offscreen hosts explicitly supply the viewport and handle the notification before rendering.
+This host API does not define a document-level action or change the JSON model.
+
 Activated is a single activation event and has no corresponding Unactivated event.
 It can also be used when activating a Button through a keyboard or console.
 A canceled press does not produce Activated.

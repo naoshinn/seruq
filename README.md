@@ -26,7 +26,8 @@ The current Rust implementation is an early prototype and implements only part o
 
 The other crates depend only on `seruq-ucr`, except in their tests and examples.
 A document can be loaded, validated, rendered, and changed by functions called through FFR.
-Buttons respond to the pointer. Keyboard input, focus, and text editing are not implemented yet.
+Buttons respond to the pointer, and viewport callbacks let applications update layout on resize.
+Keyboard input, focus, and text editing are not implemented yet.
 
 ```sh
 # Render the sample scene in a window, or to a PNG without one.
@@ -34,7 +35,7 @@ cargo run -p seruq-test-runtime --example viewer
 cargo run -p seruq-test-runtime --example viewer -- crates/seruq-test-runtime/examples/scene.json preview.png
 
 # Open a counter whose buttons call functions through FFR.
-cargo run -p seruq-test-runtime --example counter
+cargo run -p seruq-test-runtime --example interactive_counter
 
 # Run the smallest FFR example, without a window.
 cargo run -p seruq-ffr --example counter
