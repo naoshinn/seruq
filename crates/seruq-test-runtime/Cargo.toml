@@ -1,0 +1,29 @@
+[package]
+name = "seruq-test-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["window"]
+# Desktop window host. Rendering, layout, and hit testing work without it.
+window = ["dep:winit", "dep:softbuffer"]
+
+[dependencies]
+seruq-ucr.workspace = true
+winit = { workspace = true, optional = true }
+softbuffer = { workspace = true, optional = true }
+tiny-skia.workspace = true
+cosmic-text.workspace = true
+
+[dev-dependencies]
+seruq-ffr.workspace = true
+seruq-ucr-json.workspace = true
+
+[[example]]
+name = "viewer"
+required-features = ["window"]
+
+[lints]
+workspace = true
