@@ -9,13 +9,24 @@ use std::{error::Error, io, path::PathBuf};
 use seruq_ffr::{FunctionError, Functions, call, unresolved};
 use seruq_test_runtime::{Input, Runtime, RuntimeEvent, Viewport, WindowOptions};
 use seruq_ucr::{
-    ElementId, ElementKind, Event, FontSize, Mutation, MutationOp, Number, Point, Size, Ucr, Value,
+    ElementId, ElementKind, Event, Mutation, MutationOp, Number, Point, Size, Ucr, Value,
 };
 
 const LABEL: ElementId = 1;
 
 /// The operations that store a count and show it.
-fn show(count: f64) -> Result<Mutation, FunctionError> {
+fn show(count: f64, document: &Ucr) -> Result<Mutation, FunctionError> {
+    let mut kind = document
+        .data()
+        .elements
+        .get(&LABEL)
+        .ok_or("missing counter label")?
+        .kind
+        .clone();
+    let ElementKind::Text { text, .. } = &mut kind else {
+        return Err("counter label is not Text".into());
+    };
+    *text = format!("Count: {count}");
     Ok(vec![
         MutationOp::SetState {
             key: "count".into(),
@@ -25,11 +36,7 @@ fn show(count: f64) -> Result<Mutation, FunctionError> {
             id: LABEL,
             position: None,
             size: None,
-            kind: Some(ElementKind::Text {
-                text: format!("Count: {count}"),
-                font_size: FontSize::new(26.0)?,
-                font: None,
-            }),
+            kind: Some(kind),
         },
     ])
 }
@@ -49,9 +56,11 @@ fn functions() -> Functions {
                 .get("step")
                 .and_then(Value::as_number)
                 .ok_or("the target's data.step is not a number")?;
-            show(count + step)
+            show(count + step, document)
         })
-        .register("counter.reset", |_: &Event, _: &Ucr| show(0.0));
+        .register("counter.reset", |_: &Event, document: &Ucr| {
+            show(0.0, document)
+        });
     functions
 }
 
@@ -186,6 +195,10 @@ mod tests {
         let draft = seruq_ucr_json::from_str(include_str!("counter.json")).unwrap();
         let (document, _) = draft.build().unwrap();
         let mut runtime = Runtime::new(document, ".");
+        let original_color = match &runtime.document().data().elements[&LABEL].kind {
+            ElementKind::Text { color, .. } => *color,
+            _ => panic!("missing Text label"),
+        };
         let mut functions = functions();
         for (width, height, x, y, expected) in [
             (240, 300, 30.0, 150.0, 10.0),
@@ -211,6 +224,11 @@ mod tests {
                 runtime.document().data().state["count"].as_number(),
                 Some(expected)
             );
+            let ElementKind::Text { color, .. } = &runtime.document().data().elements[&LABEL].kind
+            else {
+                panic!("missing Text label");
+            };
+            assert_eq!(*color, original_color);
         }
     }
 }

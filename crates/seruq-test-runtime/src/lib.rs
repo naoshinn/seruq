@@ -177,7 +177,7 @@ impl Runtime {
     }
 }
 
-/// An opaque white-backed RGBA frame, with rows stored from top to bottom.
+/// An opaque RGBA frame, with rows stored from top to bottom.
 pub struct Frame {
     pixmap: Pixmap,
 }
@@ -191,7 +191,7 @@ impl Frame {
         self.pixmap.height()
     }
 
-    /// Four bytes per pixel, in RGBA order. The white background makes alpha 255.
+    /// Four bytes per pixel, in RGBA order. The opaque viewport makes alpha 255.
     pub fn rgba(&self) -> &[u8] {
         self.pixmap.data()
     }

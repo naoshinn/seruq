@@ -18,6 +18,7 @@ fn element(x: f32, y: f32, width: f32, height: f32, kind: ElementKind) -> Elemen
 fn container(children: &[ElementId]) -> ElementKind {
     ElementKind::Container {
         children: children.to_vec(),
+        background: None,
     }
 }
 
@@ -27,6 +28,8 @@ fn button() -> ElementKind {
         label: String::new(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
+        background: None,
     }
 }
 
@@ -35,6 +38,7 @@ fn text() -> ElementKind {
         text: String::new(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
     }
 }
 

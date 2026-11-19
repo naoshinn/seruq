@@ -14,7 +14,10 @@ fn runtime() -> Runtime {
                 Element::new(
                     Point::new(0.0, 0.0).unwrap(),
                     Size::new(100.0, 100.0).unwrap(),
-                    ElementKind::Container { children: vec![1] },
+                    ElementKind::Container {
+                        children: vec![1],
+                        background: None,
+                    },
                 ),
             ),
             (
@@ -26,6 +29,8 @@ fn runtime() -> Runtime {
                         label: String::new(),
                         font_size: FontSize::new(16.0).unwrap(),
                         font: None,
+                        color: None,
+                        background: None,
                     },
                 ),
             ),

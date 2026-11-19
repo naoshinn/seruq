@@ -23,6 +23,7 @@ fn text(text: &str) -> ElementKind {
         text: text.into(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
     }
 }
 
@@ -31,6 +32,8 @@ fn button() -> ElementKind {
         label: "+1".into(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
+        background: None,
     }
 }
 
@@ -51,6 +54,7 @@ fn counter() -> Ucr {
                 element(
                     ElementKind::Container {
                         children: vec![LABEL, INCREMENT, PLAIN],
+                        background: None,
                     },
                     &[],
                 ),

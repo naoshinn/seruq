@@ -139,7 +139,8 @@ fn decodes_every_element_type() {
     assert_eq!(
         draft.elements[&0].kind,
         ElementKind::Container {
-            children: vec![3, 1, u64::MAX, 2, 4]
+            children: vec![3, 1, u64::MAX, 2, 4],
+            background: None,
         }
     );
     let text = &draft.elements[&1];
@@ -149,6 +150,7 @@ fn decodes_every_element_type() {
         text,
         font_size,
         font,
+        ..
     } = &text.kind
     else {
         panic!("element 1 is not Text");
@@ -281,7 +283,7 @@ fn rejects_unknown_missing_and_duplicate_fields() {
         r#"{"type":"window"}"#,
         r#"{"type":"Text","text":"","font_size":1}"#,
         r#"{"text":"","font_size":1}"#,
-        r#"{"type":"text","text":"","font_size":1,"color":"red"}"#,
+        r#"{"type":"text","text":"","font_size":1,"opacity":0.5}"#,
         r#"{"type":"text","text":""}"#,
         r#"{"type":"text","text":"","text":"","font_size":1}"#,
         r#"{"type":"container"}"#,

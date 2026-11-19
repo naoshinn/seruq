@@ -21,6 +21,7 @@ fn label(count: f64) -> Result<ElementKind, Box<dyn Error + Send + Sync>> {
         text: format!("Count: {count}"),
         font_size: FontSize::new(24.0)?,
         font: None,
+        color: None,
     })
 }
 
@@ -32,6 +33,8 @@ fn document() -> Result<Ucr, Box<dyn Error + Send + Sync>> {
             label: "+1".into(),
             font_size: FontSize::new(16.0)?,
             font: None,
+            color: None,
+            background: None,
         },
     );
     button
@@ -51,6 +54,7 @@ fn document() -> Result<Ucr, Box<dyn Error + Send + Sync>> {
                     Size::new(320.0, 120.0)?,
                     ElementKind::Container {
                         children: vec![LABEL, INCREMENT],
+                        background: None,
                     },
                 ),
             ),

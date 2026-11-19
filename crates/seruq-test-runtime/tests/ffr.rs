@@ -19,6 +19,8 @@ fn button(x: f32, y: f32, function_name: &str) -> Element {
             label: String::new(),
             font_size: FontSize::new(16.0).unwrap(),
             font: None,
+            color: None,
+            background: None,
         },
     );
     element
@@ -35,6 +37,7 @@ fn runtime() -> Runtime {
         Size::new(100.0, 300.0).unwrap(),
         ElementKind::Container {
             children: vec![ADD],
+            background: None,
         },
     );
     let (document, _) = UcrDraft {
@@ -55,7 +58,8 @@ fn functions() -> Functions {
             let row = document.data().state["next_row"]
                 .as_number()
                 .ok_or("state.next_row is not a number")?;
-            let ElementKind::Container { children } = &document.data().elements[&ROOT].kind else {
+            let ElementKind::Container { children, .. } = &document.data().elements[&ROOT].kind
+            else {
                 return Err("the root is not a Container".into());
             };
             let mut element = button(0.0, 40.0 * children.len() as f32, "rows.remove");

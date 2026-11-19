@@ -64,7 +64,8 @@ The root can be any Element type; it does not have to be a Container.
 Its position is relative to the top-left corner of the viewport.
 Its size is explicit and does not automatically follow the window size.
 
-Metadata records the UCR version and can provide `default_font` for elements that omit their own font.
+Metadata records the UCR version and can provide `default_font` for elements that omit their own font,
+and `background` for the viewport color.
 The version representation and additional metadata fields remain unspecified.
 
 For example, a document with a title and a confirmation button can have this structure:
@@ -188,7 +189,7 @@ Rendering draws the list from first to last. Hit testing searches it from last t
 
 Details still to be specified: Clipping to the bounds of non-Container elements,
 whether elements without actions should also become transparent to hit testing,
-and the field used to specify the overall viewport background.
+and whether additional hit-test behavior is needed for painted Containers.
 
 ## 4. Element Attributes and Rendering Rules
 
@@ -271,15 +272,28 @@ The proposed default is Contain with centered placement. Whether all candidates 
 
 ### 4.3. Colors and Backgrounds
 
-The overall viewport background is white by default, and Container backgrounds are transparent by default.
-Text and shapes are drawn in black by default.
+Color is an opaque sRGB value with three unsigned 8-bit channels: red, green, and blue.
+The JSON encoding is `#RRGGBB`, described in the [JSON mapping](json.md#colors).
+Alpha channels, element opacity, and additional color spaces are outside the current model.
+Antialiased edges and image transparency may still blend with content already drawn;
+exact rasterization and blending tolerances remain implementation-specific under L3 conformance.
 
-The proposed defaults give Button and TextInput white backgrounds. Text, Image, and Geometry do not paint their own backgrounds.
-Not painting a background is distinct from a black or white Color value.
-Images use their own colors.
+`metadata.background` supplies the viewport background, defaulting to white.
+A Container's optional `background` fills its region before its children are drawn,
+clipped by its ancestors. Without a background, it paints nothing. Containers
+remain transparent to hit testing, regardless of whether they paint a background.
 
-Details still to be specified: The Color data type, color space, opacity, and compositing rules.
-Notation such as `#ffffff` is used for readability and does not define an official encoding.
+Text, Button, and TextInput have an optional `color`, defaulting to black.
+Button and TextInput also have an optional `background`, defaulting to white.
+TextInput placeholders default to gray (`#808080`) when `color` is absent;
+an explicit `color` applies to both the value and the placeholder.
+Colors are not inherited. Text, Image, and Geometry do not paint their own backgrounds.
+Images use their own colors; Geometry shapes and fill colors remain a proposal.
+
+The experimental runtime keeps control borders black. While a Button is pressed
+with the pointer over it, each background channel is multiplied by `208 / 255`
+and rounded down; this preserves the previous white-to-gray default. This pressed
+appearance is a runtime presentation choice, not an L2 conformance requirement.
 
 ### 4.4. Geometry
 
@@ -500,6 +514,7 @@ Application rules:
   - Remove and Move fail when they target the root.
   - Move fails if `parent` is the element itself or one of its descendants.
   - Update cannot change an element's type, and cannot replace a Container's `children`.
+    The Rust API can replace a Container kind to update its background only when the children sequence is unchanged.
   - Every operation fails if it names an element that does not exist or is not reachable from the root.
   - RemoveState, RemoveData, and RemoveAction have no effect when the key or Timing is absent; this is not a failure.
 - SetState and SetData replace the whole value of a key. Changing part of a Sequence or Map means setting the key again.
@@ -605,5 +620,5 @@ The following areas need defined behavior before independent implementations can
 6. The file formats of conformance test cases, and an encoding of Mutations.
 7. Limits on the size and nesting depth of `state` and `data`.
 
-The document also leaves Binary ID encoding, Color representation, diagnostic types, and the Binary layout unspecified.
+The document also leaves Binary ID and Color encodings, diagnostic types, and the Binary layout unspecified.
 These gaps and the proposed designs need to be resolved before v1 is published as an official specification.

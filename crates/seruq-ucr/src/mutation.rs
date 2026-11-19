@@ -25,7 +25,7 @@ pub enum MutationOp {
         index: usize,
     },
     /// Replace the given fields. `kind` must keep the element's type and
-    /// cannot target a Container, whose children change through the other operations.
+    /// cannot change a Container's children, which change through the other operations.
     Update {
         id: ElementId,
         position: Option<Point>,
@@ -135,6 +135,7 @@ pub enum MutationErrorReason {
     KindMismatch {
         id: ElementId,
     },
+    /// An Update tried to change a Container's children sequence.
     ContainerUpdate {
         id: ElementId,
     },
@@ -175,7 +176,7 @@ impl Ucr {
                 if self.data.elements.contains_key(&id) {
                     return Err(MutationErrorReason::DuplicateId { id });
                 }
-                if matches!(&element.kind, ElementKind::Container { children } if !children.is_empty())
+                if matches!(&element.kind, ElementKind::Container { children, .. } if !children.is_empty())
                 {
                     return Err(MutationErrorReason::InsertedContainerHasChildren { id });
                 }
@@ -204,7 +205,7 @@ impl Ucr {
                 while let Some(id) = stack.pop() {
                     self.parents.remove(&id);
                     if let Some(Element {
-                        kind: ElementKind::Container { children },
+                        kind: ElementKind::Container { children, .. },
                         ..
                     }) = self.data.elements.remove(&id)
                     {
@@ -254,11 +255,18 @@ impl Ucr {
                     return Err(MutationErrorReason::ElementNotFound { id });
                 };
                 if let Some(kind) = kind {
-                    if matches!(kind, ElementKind::Container { .. }) {
-                        return Err(MutationErrorReason::ContainerUpdate { id });
-                    }
                     if mem::discriminant(kind) != mem::discriminant(&element.kind) {
                         return Err(MutationErrorReason::KindMismatch { id });
+                    }
+                    if let (
+                        ElementKind::Container { children: next, .. },
+                        ElementKind::Container {
+                            children: current, ..
+                        },
+                    ) = (kind, &element.kind)
+                        && next != current
+                    {
+                        return Err(MutationErrorReason::ContainerUpdate { id });
                     }
                     element.kind = kind.clone();
                 }
@@ -329,7 +337,7 @@ impl Ucr {
             .get_mut(&id)
             .map(|element| &mut element.kind)
         {
-            Some(ElementKind::Container { children }) => Ok(children),
+            Some(ElementKind::Container { children, .. }) => Ok(children),
             _ => Err(MutationErrorReason::NotContainer { id }),
         }
     }

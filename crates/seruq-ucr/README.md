@@ -67,6 +67,15 @@ removed, and updated, and the `state` keys that changed.
 Operations address only elements reachable from the root. Removing an absent
 key or action does nothing.
 
+## Colors
+
+`Color::rgb(red, green, blue)` holds opaque 8-bit sRGB channels. `Color::BLACK`
+and `Color::WHITE` are constants; parsing and display use `#RRGGBB`.
+Text, Button, and TextInput have optional `color` fields. Container, Button,
+and TextInput have optional `background` fields. Metadata's `with_background`
+sets the viewport background. Omitted colors retain the existing defaults.
+`Update` can change a Container's background if its children sequence is unchanged.
+
 ## State, data, and actions
 
 A document is the source of truth for application state as well as appearance.
@@ -79,4 +88,4 @@ naming a function. `Event` describes something that happened to an element.
 This crate only stores and describes them; `seruq-ffr` calls the functions.
 
 See the [UCR v0 draft](../../docs/ucr/v0/README.md) for the specification this
-model follows. Colors, Geometry shapes, and image fitting are not modeled yet.
+model follows. Geometry shapes and image fitting are not modeled yet.

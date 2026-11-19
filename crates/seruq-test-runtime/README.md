@@ -56,7 +56,7 @@ while let Some(event) = runtime.next_event() {
 Only Buttons respond, only one press is in progress at a time, and moving the
 pointer produces no events. A Button hidden by another element or clipped away
 at the pointer's position does not respond. `pressed` returns the Button that
-is held down with the pointer over it; it is drawn with a gray background.
+is held down with the pointer over it; its background is darkened while pressed.
 `apply` drops a press and undelivered events whose target the mutation removed,
 even when the same mutation inserts a new element with that ID. A replacement
 Button only responds to a fresh press. Failed mutations leave queued events intact.
@@ -116,18 +116,22 @@ it opens a 640 by 480 logical-unit window.
 
 ## Current behavior
 
-- `Container`: transparent; positions are relative to the parent, descendants
-  are clipped to its bounds, and children are painted in array order.
-- `Text`: black text, explicit newlines, no automatic wrapping.
+- `Container`: transparent by default, with an optional background. Positions
+  are relative to the parent; descendants are clipped to its bounds, and children
+  are painted in array order.
+- `Text`: configurable text color (black by default), explicit newlines, no automatic wrapping.
 - `Image`: PNG files, scaled to fit while preserving aspect ratio and centered
   inside the element.
-- `Button`: a white background, gray while pressed, and a black border, with a
-  centered label.
-- `TextInput`: the same border with a value or gray placeholder; only the first
+- `Button`: configurable background and label colors; the background darkens
+  while pressed. A black border surrounds a centered label.
+- `TextInput`: configurable background and text colors, the same border, and a
+  value or placeholder (gray by default); only the first
   line is displayed.
 
-The viewport is white. Leaf content is clipped to its own bounds as well as its
-ancestors. A text element's font overrides `metadata.default_font`; without
+`metadata.background` sets the viewport color (white by default). All colors are
+opaque sRGB, encoded as `#RRGGBB` in JSON. Button/TextInput backgrounds default
+to white, text to black, and placeholders to gray unless a text color is set.
+Leaf content is clipped to its own bounds as well as its ancestors. A text element's font overrides `metadata.default_font`; without
 either, this runtime uses installed system fonts. Explicit font files use their
 first face, without system-font fallback. Assets are loaded lazily and cached
 for the runtime's lifetime, so changes to those files are not reloaded.

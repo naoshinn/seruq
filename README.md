@@ -27,6 +27,7 @@ The current Rust implementation is an early prototype and implements only part o
 The other crates depend only on `seruq-ucr`, except in their tests and examples.
 A document can be loaded, validated, rendered, and changed by functions called through FFR.
 Buttons respond to the pointer, and viewport callbacks let applications update layout on resize.
+Viewport and Container backgrounds, control backgrounds, and text colors are configurable.
 Keyboard input, focus, and text editing are not implemented yet.
 
 ```sh

@@ -17,6 +17,7 @@ fn main() {
                         text: "Hello!".to_string(),
                         font_size: FontSize::new(11.0).unwrap(),
                         font: None,
+                        color: None,
                     },
                 ),
             );

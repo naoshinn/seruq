@@ -9,6 +9,7 @@
 //! Structural constraints, such as missing references and cycles, are checked by validation.
 
 mod asset;
+mod color;
 mod error;
 mod event;
 mod font_size;
@@ -19,6 +20,7 @@ mod validate;
 mod value;
 
 pub use asset::{AssetPath, AssetPathError};
+pub use color::{Color, ColorError};
 pub use event::{Actions, Event, EventKind, FfrCall, Timing};
 pub use font_size::{FontSize, FontSizeError};
 pub use geometry::{GeometryError, Point, Size};
