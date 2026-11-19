@@ -18,7 +18,10 @@ mod viewport;
 #[cfg(feature = "window")]
 mod window;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
 
 use seruq_ucr::{Applied, ElementId, Event, MutationError, MutationOp, Ucr};
 use tiny_skia::Pixmap;
@@ -35,6 +38,7 @@ pub struct Runtime {
     document: Ucr,
     renderer: render::Renderer,
     interaction: input::Interaction,
+    pending_events: VecDeque<Event>,
     viewport: Option<Viewport>,
 }
 
@@ -45,6 +49,7 @@ impl Runtime {
             document,
             renderer: render::Renderer::new(asset_base.into()),
             interaction: input::Interaction::default(),
+            pending_events: VecDeque::new(),
             viewport: None,
         }
     }
@@ -78,22 +83,34 @@ impl Runtime {
 
     /// Apply a mutation to the document, or leave it unchanged on failure.
     ///
-    /// A press in progress on an element that the mutation removes is dropped
-    /// without producing further events.
+    /// A press in progress and queued events for elements that the mutation
+    /// removes are dropped, even when the same mutation reuses their IDs.
     pub fn apply(&mut self, mutation: &[MutationOp]) -> Result<Applied, MutationError> {
         let applied = self.document.apply(mutation)?;
         self.interaction.reconcile(&self.document, &applied);
+        self.pending_events
+            .retain(|event| !applied.removed().contains(&event.target));
         Ok(applied)
     }
 
-    /// Advance the input state and return the events the input produced, in order.
+    /// Advance the input state and queue the events the input produced, in order.
     ///
     /// Pressing a Button produces `Pushed`. Releasing produces `Released`,
     /// followed by `Activated` if the pointer is still over the same Button.
     /// A cancelled press produces only `Released`. Events do not depend on
-    /// whether the element has actions.
-    pub fn handle_input(&mut self, input: Input) -> Vec<Event> {
-        self.interaction.handle(&self.document, input)
+    /// whether the element has actions. Process each event from [`Runtime::next_event`]
+    /// and apply its mutation before taking another event or supplying more input.
+    pub fn handle_input(&mut self, input: Input) {
+        self.pending_events
+            .extend(self.interaction.handle(&self.document, input));
+    }
+
+    /// Take the next event for immediate processing. Returns `None` when drained.
+    ///
+    /// Keeping undelivered events in the runtime lets [`Runtime::apply`] discard
+    /// them when their target is removed, before its ID can name a new element.
+    pub fn next_event(&mut self) -> Option<Event> {
+        self.pending_events.pop_front()
     }
 
     /// The Button currently drawn as pressed: held down with the pointer over it.

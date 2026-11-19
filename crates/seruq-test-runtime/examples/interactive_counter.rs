@@ -150,7 +150,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 inputs.push(Input::PointerReleased { x, y });
             }
             for input in inputs {
-                for event in runtime.handle_input(input) {
+                runtime.handle_input(input);
+                while let Some(event) = runtime.next_event() {
                     handle(&mut runtime, &mut functions, event);
                 }
             }
@@ -201,7 +202,8 @@ mod tests {
                 Input::PointerPressed { x, y },
                 Input::PointerReleased { x, y },
             ] {
-                for event in runtime.handle_input(input) {
+                runtime.handle_input(input);
+                while let Some(event) = runtime.next_event() {
                     handle(&mut runtime, &mut functions, event);
                 }
             }

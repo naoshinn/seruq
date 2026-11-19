@@ -104,6 +104,8 @@ fn resizing_does_not_implicitly_change_document_or_render_state() {
 fn application_layout_mutation_changes_clipping_and_input() {
     let mut runtime = runtime();
     runtime.handle_input(Input::PointerPressed { x: 20.0, y: 20.0 });
+    assert!(runtime.next_event().is_some());
+    assert_eq!(runtime.next_event(), None);
     let Some(RuntimeEvent::ViewportResized(viewport)) = runtime.resize(200, 100, 1.0).unwrap()
     else {
         panic!("missing initial viewport")
@@ -128,12 +130,8 @@ fn application_layout_mutation_changes_clipping_and_input() {
     assert_eq!(runtime.hit_test(20.0, 20.0), None);
     assert_eq!(runtime.pressed(), None);
     // The original press survives a layout change and can finish on its target.
-    assert_eq!(
-        runtime
-            .handle_input(Input::PointerReleased { x: 160.0, y: 20.0 })
-            .len(),
-        2
-    );
+    runtime.handle_input(Input::PointerReleased { x: 160.0, y: 20.0 });
+    assert_eq!(std::iter::from_fn(|| runtime.next_event()).count(), 2);
     let frame = runtime.render(200, 100, 1.0).unwrap();
     let offset = ((20 * 200 + 150) * 4) as usize;
     assert_eq!(&frame.rgba()[offset..offset + 4], &[0, 0, 0, 255]);

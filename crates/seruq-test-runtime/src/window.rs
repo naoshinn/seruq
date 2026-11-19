@@ -74,9 +74,10 @@ impl<H: FnMut(&mut Runtime, RuntimeEvent)> App<H> {
     /// so that each event is handled against the document left by the previous one.
     fn input(&mut self, input: Input) {
         let pressed = self.runtime.pressed();
-        let events = self.runtime.handle_input(input);
-        let handled = !events.is_empty();
-        for event in events {
+        self.runtime.handle_input(input);
+        let mut handled = false;
+        while let Some(event) = self.runtime.next_event() {
+            handled = true;
             (self.handler)(&mut self.runtime, RuntimeEvent::Element(event));
         }
         if (handled || self.runtime.pressed() != pressed)

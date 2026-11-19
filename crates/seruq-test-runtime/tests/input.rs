@@ -86,20 +86,21 @@ fn scene() -> Runtime {
     ])
 }
 
+fn events(runtime: &mut Runtime, input: Input) -> Vec<Event> {
+    runtime.handle_input(input);
+    std::iter::from_fn(|| runtime.next_event()).collect()
+}
+
 fn press(runtime: &mut Runtime, x: f64, y: f64) -> Vec<Event> {
-    runtime.handle_input(Input::PointerPressed { x, y })
+    events(runtime, Input::PointerPressed { x, y })
 }
 
 fn release(runtime: &mut Runtime, x: f64, y: f64) -> Vec<Event> {
-    runtime.handle_input(Input::PointerReleased { x, y })
+    events(runtime, Input::PointerReleased { x, y })
 }
 
 fn moved(runtime: &mut Runtime, x: f64, y: f64) {
-    assert!(
-        runtime
-            .handle_input(Input::PointerMoved { x, y })
-            .is_empty()
-    );
+    assert!(events(runtime, Input::PointerMoved { x, y }).is_empty());
 }
 
 fn pushed(target: ElementId) -> Event {
@@ -163,7 +164,7 @@ fn returning_before_release_activates() {
 fn leaving_the_viewport_keeps_the_press_until_release() {
     let mut runtime = scene();
     assert_eq!(press(&mut runtime, 20.0, 20.0), [pushed(A)]);
-    assert!(runtime.handle_input(Input::PointerLeft).is_empty());
+    assert!(events(&mut runtime, Input::PointerLeft).is_empty());
     assert_eq!(runtime.pressed(), None);
     moved(&mut runtime, 20.0, 20.0);
     assert_eq!(runtime.pressed(), Some(A));
@@ -177,11 +178,11 @@ fn leaving_the_viewport_keeps_the_press_until_release() {
 fn cancelled_press_only_releases() {
     let mut runtime = scene();
     assert_eq!(press(&mut runtime, 20.0, 20.0), [pushed(A)]);
-    assert_eq!(runtime.handle_input(Input::PointerCancelled), [released(A)]);
+    assert_eq!(events(&mut runtime, Input::PointerCancelled), [released(A)]);
     assert_eq!(runtime.pressed(), None);
     // The physical release that follows belongs to no press.
     assert!(release(&mut runtime, 20.0, 20.0).is_empty());
-    assert!(runtime.handle_input(Input::PointerCancelled).is_empty());
+    assert!(events(&mut runtime, Input::PointerCancelled).is_empty());
 }
 
 #[test]
@@ -317,7 +318,8 @@ fn pressed_button_is_drawn_differently_only_while_under_the_pointer() {
 /// The loop an application runs: one event at a time, applying each mutation
 /// before the next event is resolved.
 fn dispatch(runtime: &mut Runtime, functions: &mut Functions, input: Input) {
-    for event in runtime.handle_input(input) {
+    runtime.handle_input(input);
+    while let Some(event) = runtime.next_event() {
         if let Some(mutation) = call(functions, runtime.document(), &event).unwrap() {
             runtime.apply(&mutation).unwrap();
         }
@@ -441,4 +443,112 @@ fn function_that_removes_its_button_on_release_discards_the_activation() {
     // against the document left by the first.
     click(&mut runtime, &mut functions, 20.0, 20.0);
     assert_eq!(runtime.layout().len(), 1);
+}
+
+#[test]
+fn replacing_a_button_on_release_does_not_activate_its_replacement() {
+    let mut runtime = runtime([
+        (0, element(0.0, 0.0, 400.0, 200.0, container(&[A]))),
+        (
+            A,
+            with_action(
+                element(10.0, 10.0, 100.0, 40.0, button()),
+                Timing::Released,
+                "replace",
+            ),
+        ),
+    ]);
+    let mut functions = Functions::new();
+    functions
+        .register("replace", |event: &Event, _: &Ucr| {
+            Ok(vec![
+                MutationOp::Remove { id: event.target },
+                MutationOp::Insert {
+                    id: event.target,
+                    element: with_action(
+                        element(10.0, 10.0, 100.0, 40.0, button()),
+                        Timing::Activated,
+                        "count",
+                    ),
+                    parent: 0,
+                    index: 0,
+                },
+            ])
+        })
+        .register("count", |_: &Event, _: &Ucr| {
+            Ok(vec![MutationOp::SetState {
+                key: "count".into(),
+                value: Value::from(1),
+            }])
+        });
+
+    click(&mut runtime, &mut functions, 20.0, 20.0);
+    assert!(!runtime.document().data().state.contains_key("count"));
+
+    // Reusing the ID does not prevent a fresh click on the replacement.
+    click(&mut runtime, &mut functions, 20.0, 20.0);
+    assert_eq!(runtime.document().data().state["count"], Value::from(1));
+}
+
+#[test]
+fn replacing_a_subtree_discards_queued_events_for_its_descendants() {
+    let mut runtime = scene();
+    assert_eq!(press(&mut runtime, 30.0, 130.0), [pushed(CLIPPED)]);
+    runtime.handle_input(Input::PointerReleased { x: 30.0, y: 130.0 });
+    assert_eq!(runtime.next_event(), Some(released(CLIPPED)));
+
+    // Remove the ancestor, then reuse both its ID and the Button's ID in a
+    // separate mutation. The old activation must never reach the host handler.
+    runtime.apply(&[MutationOp::Remove { id: 6 }]).unwrap();
+    runtime
+        .apply(&[
+            MutationOp::Insert {
+                id: 6,
+                element: element(10.0, 110.0, 50.0, 40.0, container(&[])),
+                parent: 0,
+                index: 5,
+            },
+            MutationOp::Insert {
+                id: CLIPPED,
+                element: element(0.0, 0.0, 100.0, 40.0, button()),
+                parent: 6,
+                index: 0,
+            },
+        ])
+        .unwrap();
+    assert_eq!(runtime.next_event(), None);
+    assert_eq!(press(&mut runtime, 30.0, 130.0), [pushed(CLIPPED)]);
+    assert_eq!(
+        release(&mut runtime, 30.0, 130.0),
+        [released(CLIPPED), activated(CLIPPED)]
+    );
+}
+
+#[test]
+fn updates_and_failed_mutations_preserve_queued_activation() {
+    let mut runtime = scene();
+    press(&mut runtime, 20.0, 20.0);
+    runtime.handle_input(Input::PointerReleased { x: 20.0, y: 20.0 });
+    assert_eq!(runtime.next_event(), Some(released(A)));
+
+    // Neither an unrelated removal nor an update replaces the event's target.
+    runtime
+        .apply(&[
+            MutationOp::Remove { id: B },
+            MutationOp::Update {
+                id: A,
+                position: Some(Point::new(10.0, 150.0).unwrap()),
+                size: None,
+                kind: None,
+            },
+        ])
+        .unwrap();
+    // The attempted removal is rolled back, so its queued event must survive.
+    assert!(
+        runtime
+            .apply(&[MutationOp::Remove { id: A }, MutationOp::Remove { id: 0 }])
+            .is_err()
+    );
+    assert_eq!(runtime.next_event(), Some(activated(A)));
+    assert_eq!(runtime.next_event(), None);
 }

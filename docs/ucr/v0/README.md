@@ -384,7 +384,8 @@ Consequences of these rules:
 - Activation depends only on where the pointer is released. Leaving the Button, or the viewport, and returning before
   the release still activates it. Releasing over a part of the Button that is clipped or covered does not.
 - Released and Activated come from one input. They are still processed one at a time: if the Mutation returned for
-  Released removes the Button, Activated is discarded like any other Event whose target no longer exists.
+  Released removes the Button, Activated is discarded, even if a later Insert reuses its ID.
+  Queued Events belong to the original element and are never delivered to its replacement.
 - If a Mutation removes the pressed Button, the press ends without further events. Reusing the removed Button's ID
   in the same Mutation does not continue the press.
 - If a Mutation moves the pressed Button, the press continues; whether it activates is decided by the hit test at release.

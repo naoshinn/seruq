@@ -32,8 +32,19 @@ frontmost element under it; Containers are never hit, and every other element
 type hides what is behind it. `apply` passes a mutation to the document, which
 either applies all of its operations or leaves the document unchanged.
 
-`handle_input` takes pointer input in logical coordinates and returns the UCR
-events it produces, without a window:
+`handle_input` takes pointer input in logical coordinates and queues the UCR
+events it produces, without a window. Take and process them one at a time with
+`next_event`, applying each mutation before taking the next event or supplying
+more input:
+
+```rust,ignore
+runtime.handle_input(input);
+while let Some(event) = runtime.next_event() {
+    if let Some(mutation) = seruq_ffr::call(&mut functions, runtime.document(), &event)? {
+        runtime.apply(&mutation)?;
+    }
+}
+```
 
 | Input | Events |
 | --- | --- |
@@ -46,7 +57,9 @@ Only Buttons respond, only one press is in progress at a time, and moving the
 pointer produces no events. A Button hidden by another element or clipped away
 at the pointer's position does not respond. `pressed` returns the Button that
 is held down with the pointer over it; it is drawn with a gray background.
-`apply` drops a press whose Button the mutation removed.
+`apply` drops a press and undelivered events whose target the mutation removed,
+even when the same mutation inserts a new element with that ID. A replacement
+Button only responds to a fresh press. Failed mutations leave queued events intact.
 
 The runtime does not call functions. `run_with` opens a window and passes each
 event to a handler, which typically resolves it with `seruq-ffr` and applies the
