@@ -8,7 +8,7 @@ use cosmic_text::{
     Align, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache,
     Weight, Wrap, fontdb,
 };
-use seruq_ucr::ElementId;
+use seruq_ucr::{Color as UcrColor, ElementId};
 use tiny_skia::Pixmap;
 
 use crate::{Error, layout::Bounds};
@@ -20,7 +20,7 @@ pub(crate) struct TextStyle {
     pub size: f64,
     pub font: Option<PathBuf>,
     pub centered: bool,
-    pub placeholder: bool,
+    pub color: UcrColor,
 }
 
 #[derive(Default)]
@@ -155,11 +155,7 @@ impl TextRenderer {
                 0.0
             })
         .round() as i64;
-        let color = if style.placeholder {
-            Color::rgb(128, 128, 128)
-        } else {
-            Color::rgb(0, 0, 0)
-        };
+        let color = Color::rgb(style.color.red, style.color.green, style.color.blue);
         buffer.draw(
             &mut context.system,
             &mut context.cache,

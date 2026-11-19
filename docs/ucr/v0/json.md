@@ -3,7 +3,7 @@
 This document describes the JSON mapping implemented by `seruq-ucr-json` for the
 current Rust model. It is a draft, not a stable storage format or a complete mapping
 of every feature proposed in the [UCR v0 specification](README.md).
-Colors, Geometry drawing data, Events, and Mutations are not implemented yet.
+Geometry drawing data, Events, and Mutations are not implemented yet.
 There is no JSON Schema at this stage.
 
 ## Document Structure
@@ -12,7 +12,7 @@ A document is a UTF-8 JSON object with three required fields and one optional fi
 
 | Field | JSON representation |
 | --- | --- |
-| `metadata` | Object with a required string `version` and optional asset path `default_font` |
+| `metadata` | Object with a required string `version` and optional asset path `default_font` and optional Color `background` |
 | `root` | Element ID string |
 | `elements` | Object mapping Element ID strings to Element objects |
 | `state` | Optional object mapping strings to [values](#state-and-data-values) |
@@ -35,11 +35,11 @@ The `type` field selects the following attributes inside `kind`:
 
 | Type | Required fields | Optional fields |
 | --- | --- | --- |
-| `container` | `children`: array of Element ID strings | None |
-| `text` | `text`: string, `font_size`: number | `font`: asset path |
+| `container` | `children`: array of Element ID strings | `background`: Color |
+| `text` | `text`: string, `font_size`: number | `font`: asset path, `color`: Color |
 | `image` | `source`: asset path | None |
-| `button` | `label`: string, `font_size`: number | `font`: asset path |
-| `text_input` | `value`: string, `font_size`: number | `font`: asset path, `placeholder`: string |
+| `button` | `label`: string, `font_size`: number | `font`: asset path, `color`: Color, `background`: Color |
+| `text_input` | `value`: string, `font_size`: number | `font`: asset path, `placeholder`: string, `color`: Color, `background`: Color |
 | `geometry` | None | None |
 
 Optional fields may be omitted or set to `null`; both decode as absent. Writers
@@ -92,6 +92,27 @@ and rejects numbers that overflow to infinity. Negative zero is preserved by the
 
 NaN and infinities have no JSON representation, because no UCR value can hold them.
 Strings such as `"NaN"` and numeric strings such as `"16"` are rejected.
+
+## Colors
+
+A Color is a string in `#RRGGBB` format: three opaque 8-bit sRGB channels.
+Hexadecimal letters may be uppercase or lowercase; writers use lowercase.
+For example, `"#2563eb"` is blue and `"#ffffff"` is white. Other formats,
+including short hex, alpha channels, and named colors, are rejected.
+
+All color fields are optional. Omission or `null` selects the default and
+writers omit absent colors. Defaults are white for `metadata.background`
+and Button/TextInput backgrounds, transparent for a Container background,
+and black for text. Without an explicit TextInput color, placeholders are gray.
+Colors do not inherit from parents or metadata. `metadata.background` paints
+only the viewport behind the document.
+
+For example, a Button's `kind` can be:
+
+```json
+{ "type": "button", "label": "Confirm", "font_size": 16,
+  "color": "#ffffff", "background": "#2563eb" }
+```
 
 ## Actions
 

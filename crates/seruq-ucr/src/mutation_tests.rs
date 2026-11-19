@@ -15,6 +15,7 @@ fn element(kind: ElementKind) -> Element {
 fn container(children: &[ElementId]) -> ElementKind {
     ElementKind::Container {
         children: children.to_vec(),
+        background: None,
     }
 }
 
@@ -23,6 +24,7 @@ fn text(text: &str) -> ElementKind {
         text: text.into(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
     }
 }
 
@@ -31,6 +33,8 @@ fn button(label: &str) -> ElementKind {
         label: label.into(),
         font_size: FontSize::new(16.0).unwrap(),
         font: None,
+        color: None,
+        background: None,
     }
 }
 
@@ -59,7 +63,7 @@ fn ucr() -> Ucr {
 
 fn children(ucr: &Ucr, id: ElementId) -> &[ElementId] {
     match &ucr.data().elements[&id].kind {
-        ElementKind::Container { children } => children,
+        ElementKind::Container { children, .. } => children,
         _ => panic!("element {id} is not a Container"),
     }
 }
@@ -410,6 +414,31 @@ fn update_moves_and_resizes_container_and_root() {
     .unwrap();
     assert_eq!(ucr.data().elements[&0].size, size);
     assert_eq!(children(&ucr, 0), [1, 2]);
+}
+
+#[test]
+fn container_colors_can_change_but_children_cannot() {
+    let mut ucr = ucr();
+    let parents = [ucr.parent(1), ucr.parent(2)];
+    let painted = ElementKind::Container {
+        children: vec![1, 2],
+        background: Some(crate::Color::rgb(32, 64, 128)),
+    };
+    let applied = ucr.apply(&[update_kind(0, painted.clone())]).unwrap();
+    assert_eq!(ucr.data().elements[&0].kind, painted);
+    assert!(applied.updated().contains(&0));
+    assert_eq!([ucr.parent(1), ucr.parent(2)], parents);
+
+    let before = ucr.clone();
+    let error = ucr
+        .apply(&[update_kind(0, container(&[2, 1]))])
+        .unwrap_err();
+    assert_eq!(error.reason, MutationErrorReason::ContainerUpdate { id: 0 });
+    assert_eq!(ucr, before);
+
+    ucr.apply(&[update_kind(0, container(&[1, 2]))]).unwrap();
+    assert_eq!(ucr.data().elements[&0].kind, container(&[1, 2]));
+    assert_consistent(&ucr);
 }
 
 #[test]

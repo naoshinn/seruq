@@ -25,15 +25,20 @@ The current Rust implementation is an early prototype and implements only part o
 | [`seruq-test-runtime`](crates/seruq-test-runtime) | A provisional CPU renderer, hit tester, and window host |
 
 The other crates depend only on `seruq-ucr`, except in their tests and examples.
-A document can be loaded, validated, rendered, hit-tested, and changed by functions called through FFR.
-Input handling is not implemented yet, so events are constructed in code.
+A document can be loaded, validated, rendered, and changed by functions called through FFR.
+Buttons respond to the pointer, and viewport callbacks let applications update layout on resize.
+Viewport and Container backgrounds, control backgrounds, and text colors are configurable.
+Keyboard input, focus, and text editing are not implemented yet.
 
 ```sh
 # Render the sample scene in a window, or to a PNG without one.
 cargo run -p seruq-test-runtime --example viewer
 cargo run -p seruq-test-runtime --example viewer -- crates/seruq-test-runtime/examples/scene.json preview.png
 
-# Run a counter whose button calls a function through FFR, without a window.
+# Open a counter whose buttons call functions through FFR.
+cargo run -p seruq-test-runtime --example interactive_counter
+
+# Run the smallest FFR example, without a window.
 cargo run -p seruq-ffr --example counter
 ```
 

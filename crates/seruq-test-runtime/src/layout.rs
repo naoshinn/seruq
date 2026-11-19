@@ -84,7 +84,7 @@ pub(crate) fn layout(document: &Ucr) -> Vec<Placed> {
             bounds,
             visible,
         });
-        if let ElementKind::Container { children } = &element.kind {
+        if let ElementKind::Container { children, .. } = &element.kind {
             // Push in reverse so each subtree is completed in children order.
             stack.extend(
                 children

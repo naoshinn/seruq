@@ -140,7 +140,7 @@ impl UcrDraft {
             // Push Exit before the children so it runs after their traversal (LIFO).
             stack.push(Step::Exit(parent));
 
-            let ElementKind::Container { children } = &elements[&parent].kind else {
+            let ElementKind::Container { children, .. } = &elements[&parent].kind else {
                 continue;
             };
             let first_child = stack.len();

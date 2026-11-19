@@ -37,7 +37,8 @@ failure are errors that identify the element, timing, and function name; neither
 changes the document.
 
 This crate depends only on `seruq-ucr`. It does not produce events; a runtime
-does. Run the headless example from the workspace root:
+does. `seruq-test-runtime` has a windowed counter that uses this crate. Run the
+headless example from the workspace root:
 
 ```sh
 cargo run -p seruq-ffr --example counter

@@ -1,5 +1,23 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use seruq_ucr::ElementId;
+use seruq_ucr::{Color, ElementId};
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct JsonColor(pub Color);
+
+impl Serialize for JsonColor {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for JsonColor {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map(Self)
+            .map_err(de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct JsonId(pub ElementId);

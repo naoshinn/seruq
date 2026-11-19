@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use seruq_ucr::{AssetPath, ElementId, ElementKind, Ucr};
+use seruq_ucr::{AssetPath, Color as UcrColor, ElementId, ElementKind, Ucr};
 use tiny_skia::{
     Color, FillRule, FilterQuality, Mask, Paint, PathBuilder, Pixmap, PixmapPaint, Rect, Transform,
 };
@@ -21,6 +21,10 @@ fn rect(bounds: Bounds) -> Option<Rect> {
         bounds.width as f32,
         bounds.height as f32,
     )
+}
+
+fn raster_color(color: UcrColor) -> Color {
+    Color::from_rgba8(color.red, color.green, color.blue, 255)
 }
 
 pub(crate) struct Renderer {
@@ -44,20 +48,23 @@ impl Renderer {
         width: u32,
         height: u32,
         scale: f64,
+        pressed: Option<ElementId>,
     ) -> Result<Frame, Error> {
         if !scale.is_finite() || scale <= 0.0 {
             return Err(Error::InvalidScaleFactor(scale));
         }
         let mut pixmap =
             Pixmap::new(width, height).ok_or(Error::InvalidViewport { width, height })?;
-        pixmap.fill(Color::WHITE);
+        let data = document.data();
+        pixmap.fill(raster_color(
+            data.metadata.background().unwrap_or(UcrColor::WHITE),
+        ));
         let viewport = Bounds {
             x: 0.0,
             y: 0.0,
             width: f64::from(width),
             height: f64::from(height),
         };
-        let data = document.data();
         for placed in layout(document) {
             let id = placed.id;
             let element = &data.elements[&id];
@@ -76,11 +83,16 @@ impl Renderer {
                 continue;
             };
             match &element.kind {
-                ElementKind::Container { .. } => {}
+                ElementKind::Container { background, .. } => {
+                    if let Some(background) = background {
+                        fill_rect(&mut pixmap, bounds, clip, raster_color(*background));
+                    }
+                }
                 ElementKind::Text {
                     text,
                     font_size,
                     font,
+                    color,
                 } => {
                     self.text.draw(
                         &mut pixmap,
@@ -95,7 +107,7 @@ impl Renderer {
                                 .or(data.metadata.default_font())
                                 .map(|path| self.asset_base.join(path.as_str())),
                             centered: false,
-                            placeholder: false,
+                            color: color.unwrap_or(UcrColor::BLACK),
                         },
                     )?;
                 }
@@ -106,8 +118,21 @@ impl Renderer {
                     label,
                     font_size,
                     font,
+                    color,
+                    background,
                 } => {
-                    draw_control(&mut pixmap, bounds, clip, scale);
+                    let background = background.unwrap_or(UcrColor::WHITE);
+                    let background = if pressed == Some(id) {
+                        let darken = |channel| (u16::from(channel) * 208 / 255) as u8;
+                        UcrColor::rgb(
+                            darken(background.red),
+                            darken(background.green),
+                            darken(background.blue),
+                        )
+                    } else {
+                        background
+                    };
+                    draw_control(&mut pixmap, bounds, clip, scale, raster_color(background));
                     self.text.draw(
                         &mut pixmap,
                         label,
@@ -121,7 +146,7 @@ impl Renderer {
                                 .or(data.metadata.default_font())
                                 .map(|path| self.asset_base.join(path.as_str())),
                             centered: true,
-                            placeholder: false,
+                            color: color.unwrap_or(UcrColor::BLACK),
                         },
                     )?;
                 }
@@ -130,8 +155,16 @@ impl Renderer {
                     font_size,
                     font,
                     placeholder,
+                    color,
+                    background,
                 } => {
-                    draw_control(&mut pixmap, bounds, clip, scale);
+                    draw_control(
+                        &mut pixmap,
+                        bounds,
+                        clip,
+                        scale,
+                        raster_color(background.unwrap_or(UcrColor::WHITE)),
+                    );
                     let text = if value.is_empty() {
                         placeholder.as_deref().unwrap_or("")
                     } else {
@@ -150,7 +183,11 @@ impl Renderer {
                                 .or(data.metadata.default_font())
                                 .map(|path| self.asset_base.join(path.as_str())),
                             centered: false,
-                            placeholder: value.is_empty(),
+                            color: color.unwrap_or(if value.is_empty() {
+                                UcrColor::rgb(128, 128, 128)
+                            } else {
+                                UcrColor::BLACK
+                            }),
                         },
                     )?;
                 }
@@ -232,7 +269,7 @@ fn fill_rect(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, color: Color) {
     }
 }
 
-fn draw_control(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, scale: f64) {
+fn draw_control(pixmap: &mut Pixmap, bounds: Bounds, clip: Bounds, scale: f64, background: Color) {
     fill_rect(pixmap, bounds, clip, Color::BLACK);
-    fill_rect(pixmap, bounds.inset(scale), clip, Color::WHITE);
+    fill_rect(pixmap, bounds.inset(scale), clip, background);
 }

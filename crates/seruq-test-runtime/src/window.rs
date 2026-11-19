@@ -4,12 +4,12 @@ use softbuffer::{Context, Surface};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::WindowEvent,
+    event::{ElementState, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 
-use crate::{Error, Runtime};
+use crate::{Error, Input, Runtime, RuntimeEvent};
 
 /// Window dimensions are logical units, independent of the document's root size.
 #[derive(Debug, Clone)]
@@ -29,7 +29,11 @@ impl Default for WindowOptions {
     }
 }
 
-pub(crate) fn run(runtime: Runtime, options: WindowOptions) -> Result<(), Error> {
+pub(crate) fn run(
+    runtime: Runtime,
+    options: WindowOptions,
+    handler: impl FnMut(&mut Runtime, RuntimeEvent),
+) -> Result<(), Error> {
     if options.width == 0 || options.height == 0 {
         return Err(Error::InvalidViewport {
             width: options.width,
@@ -42,7 +46,9 @@ pub(crate) fn run(runtime: Runtime, options: WindowOptions) -> Result<(), Error>
     let mut app = App {
         runtime,
         options,
+        handler,
         surface: None,
+        cursor: None,
         error: None,
     };
     event_loop.run_app(&mut app).map_err(Error::window)?;
@@ -53,14 +59,34 @@ pub(crate) fn run(runtime: Runtime, options: WindowOptions) -> Result<(), Error>
     }
 }
 
-struct App {
+struct App<H> {
     runtime: Runtime,
     options: WindowOptions,
+    handler: H,
     surface: Option<Surface<Rc<Window>, Rc<Window>>>,
+    /// The pointer's physical position while it is inside the window.
+    cursor: Option<(f64, f64)>,
     error: Option<Error>,
 }
 
-impl App {
+impl<H: FnMut(&mut Runtime, RuntimeEvent)> App<H> {
+    /// Pass an input to the runtime and its events to the handler, one at a time,
+    /// so that each event is handled against the document left by the previous one.
+    fn input(&mut self, input: Input) {
+        let pressed = self.runtime.pressed();
+        self.runtime.handle_input(input);
+        let mut handled = false;
+        while let Some(event) = self.runtime.next_event() {
+            handled = true;
+            (self.handler)(&mut self.runtime, RuntimeEvent::Element(event));
+        }
+        if (handled || self.runtime.pressed() != pressed)
+            && let Some(surface) = &self.surface
+        {
+            surface.window().request_redraw();
+        }
+    }
+
     fn create_surface(&mut self, event_loop: &ActiveEventLoop) -> Result<(), Error> {
         let attributes = Window::default_attributes()
             .with_title(&self.options.title)
@@ -75,10 +101,34 @@ impl App {
 
         window.request_redraw();
         self.surface = Some(surface);
+        self.runtime.viewport = None;
+        self.notify_viewport()?;
+        Ok(())
+    }
+
+    fn notify_viewport(&mut self) -> Result<(), Error> {
+        let Some(surface) = &self.surface else {
+            return Ok(());
+        };
+        let window = surface.window();
+        let size = window.inner_size();
+        if let Some(event) = self
+            .runtime
+            .resize(size.width, size.height, window.scale_factor())?
+        {
+            if let Some((x, y)) = self.cursor {
+                self.runtime.handle_input(Input::PointerMoved {
+                    x: x / window.scale_factor(),
+                    y: y / window.scale_factor(),
+                });
+            }
+            (self.handler)(&mut self.runtime, event);
+        }
         Ok(())
     }
 
     fn redraw(&mut self) -> Result<(), Error> {
+        self.notify_viewport()?;
         let Some(surface) = self.surface.as_mut() else {
             return Ok(());
         };
@@ -106,7 +156,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl<H: FnMut(&mut Runtime, RuntimeEvent)> ApplicationHandler for App<H> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.surface.is_none()
             && let Err(error) = self.create_surface(event_loop)
@@ -128,12 +178,46 @@ impl ApplicationHandler for App {
         if surface.window().id() != window_id {
             return;
         }
+        let scale_factor = surface.window().scale_factor();
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 surface.window().request_redraw();
+                // Notify even when minimized and the OS does not request a frame.
+                // Read again before drawing because DPI and size can arrive separately.
+                if let Err(error) = self.notify_viewport() {
+                    self.error = Some(error);
+                    event_loop.exit();
+                }
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                let (x, y) = (position.x / scale_factor, position.y / scale_factor);
+                self.cursor = Some((position.x, position.y));
+                self.input(Input::PointerMoved { x, y });
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.cursor = None;
+                self.input(Input::PointerLeft);
+            }
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => self.input(match (state, self.cursor) {
+                (ElementState::Pressed, Some((x, y))) => Input::PointerPressed {
+                    x: x / scale_factor,
+                    y: y / scale_factor,
+                },
+                (ElementState::Released, Some((x, y))) => Input::PointerReleased {
+                    x: x / scale_factor,
+                    y: y / scale_factor,
+                },
+                // A press outside the window targets nothing, and a release
+                // there cannot activate anything.
+                (_, None) => Input::PointerCancelled,
+            }),
+            WindowEvent::Focused(false) => self.input(Input::PointerCancelled),
             WindowEvent::RedrawRequested => {
                 if let Err(error) = self.redraw() {
                     self.error = Some(error);
@@ -145,7 +229,10 @@ impl ApplicationHandler for App {
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        self.input(Input::PointerCancelled);
+        self.cursor = None;
         self.surface = None;
+        self.runtime.viewport = None;
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

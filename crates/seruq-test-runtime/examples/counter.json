@@ -1,0 +1,37 @@
+{
+  "metadata": { "version": "0.1.0", "background": "#eef2ff" },
+  "root": "0",
+  "state": { "count": 0 },
+  "elements": {
+    "0": {
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 640, "height": 480 },
+      "kind": { "type": "container", "children": ["1", "2", "3", "4"], "background": "#f8fafc" }
+    },
+    "1": {
+      "position": { "x": 24, "y": 24 },
+      "size": { "width": 580, "height": 40 },
+      "kind": { "type": "text", "text": "Count: 0", "font_size": 26, "color": "#172554" }
+    },
+    "2": {
+      "position": { "x": 24, "y": 80 },
+      "size": { "width": 100, "height": 48 },
+      "kind": { "type": "button", "label": "+1", "font_size": 20, "color": "#ffffff", "background": "#2563eb" },
+      "actions": { "activated": { "function_name": "counter.add" } },
+      "data": { "step": 1 }
+    },
+    "3": {
+      "position": { "x": 136, "y": 80 },
+      "size": { "width": 100, "height": 48 },
+      "kind": { "type": "button", "label": "+10", "font_size": 20, "color": "#ffffff", "background": "#0f766e" },
+      "actions": { "activated": { "function_name": "counter.add" } },
+      "data": { "step": 10 }
+    },
+    "4": {
+      "position": { "x": 248, "y": 80 },
+      "size": { "width": 100, "height": 48 },
+      "kind": { "type": "button", "label": "Reset", "font_size": 20, "color": "#1e293b", "background": "#e2e8f0" },
+      "actions": { "activated": { "function_name": "counter.reset" } }
+    }
+  }
+}

@@ -3,21 +3,33 @@
 //! Applications own decoding and validation. Pass a validated [`Ucr`] and an
 //! explicit asset base to [`Runtime::new`], then render offscreen or open a window.
 //! The window host requires the default `window` feature.
+//!
+//! [`Runtime::handle_input`] turns pointer input into UCR events without a
+//! window. The runtime does not call functions; the application decides what
+//! each event does, typically by resolving it through FFR and passing the
+//! resulting mutation to [`Runtime::apply`].
 
 mod error;
+mod input;
 mod layout;
 mod render;
 mod text;
+mod viewport;
 #[cfg(feature = "window")]
 mod window;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
 
-use seruq_ucr::{Applied, ElementId, MutationError, MutationOp, Ucr};
+use seruq_ucr::{Applied, ElementId, Event, MutationError, MutationOp, Ucr};
 use tiny_skia::Pixmap;
 
 pub use error::Error;
+pub use input::Input;
 pub use layout::{Bounds, Placed};
+pub use viewport::{RuntimeEvent, Viewport};
 #[cfg(feature = "window")]
 pub use window::WindowOptions;
 
@@ -25,6 +37,9 @@ pub use window::WindowOptions;
 pub struct Runtime {
     document: Ucr,
     renderer: render::Renderer,
+    interaction: input::Interaction,
+    pending_events: VecDeque<Event>,
+    viewport: Option<Viewport>,
 }
 
 impl Runtime {
@@ -33,6 +48,9 @@ impl Runtime {
         Self {
             document,
             renderer: render::Renderer::new(asset_base.into()),
+            interaction: input::Interaction::default(),
+            pending_events: VecDeque::new(),
+            viewport: None,
         }
     }
 
@@ -40,9 +58,64 @@ impl Runtime {
         &self.document
     }
 
+    /// Last viewport supplied by the host, independent of the document's root size.
+    pub fn viewport(&self) -> Option<Viewport> {
+        self.viewport
+    }
+
+    /// Supply physical dimensions and scale, returning an event on the first call
+    /// or a change. Zero dimensions are allowed when minimized. Invalid input
+    /// leaves the previous viewport unchanged. This never changes the document.
+    /// Offscreen hosts explicitly deliver the returned event before rendering.
+    pub fn resize(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale_factor: f64,
+    ) -> Result<Option<RuntimeEvent>, Error> {
+        let viewport = Viewport::new(width, height, scale_factor)?;
+        if self.viewport == Some(viewport) {
+            return Ok(None);
+        }
+        self.viewport = Some(viewport);
+        Ok(Some(RuntimeEvent::ViewportResized(viewport)))
+    }
+
     /// Apply a mutation to the document, or leave it unchanged on failure.
+    ///
+    /// A press in progress and queued events for elements that the mutation
+    /// removes are dropped, even when the same mutation reuses their IDs.
     pub fn apply(&mut self, mutation: &[MutationOp]) -> Result<Applied, MutationError> {
-        self.document.apply(mutation)
+        let applied = self.document.apply(mutation)?;
+        self.interaction.reconcile(&self.document, &applied);
+        self.pending_events
+            .retain(|event| !applied.removed().contains(&event.target));
+        Ok(applied)
+    }
+
+    /// Advance the input state and queue the events the input produced, in order.
+    ///
+    /// Pressing a Button produces `Pushed`. Releasing produces `Released`,
+    /// followed by `Activated` if the pointer is still over the same Button.
+    /// A cancelled press produces only `Released`. Events do not depend on
+    /// whether the element has actions. Process each event from [`Runtime::next_event`]
+    /// and apply its mutation before taking another event or supplying more input.
+    pub fn handle_input(&mut self, input: Input) {
+        self.pending_events
+            .extend(self.interaction.handle(&self.document, input));
+    }
+
+    /// Take the next event for immediate processing. Returns `None` when drained.
+    ///
+    /// Keeping undelivered events in the runtime lets [`Runtime::apply`] discard
+    /// them when their target is removed, before its ID can name a new element.
+    pub fn next_event(&mut self) -> Option<Event> {
+        self.pending_events.pop_front()
+    }
+
+    /// The Button currently drawn as pressed: held down with the pointer over it.
+    pub fn pressed(&self) -> Option<ElementId> {
+        self.interaction.pressed(&self.document)
     }
 
     /// Every reachable element in paint order, in logical coordinates.
@@ -61,18 +134,50 @@ impl Runtime {
     ///
     /// `scale_factor` converts the document's logical coordinates to pixels.
     pub fn render(&mut self, width: u32, height: u32, scale_factor: f64) -> Result<Frame, Error> {
+        let pressed = self.pressed();
         self.renderer
-            .render(&self.document, width, height, scale_factor)
+            .render(&self.document, width, height, scale_factor, pressed)
     }
 
     /// Open a desktop window and display the document. Call from the main thread.
+    ///
+    /// Events are produced and discarded; use [`Runtime::run_with`] to handle them.
     #[cfg(feature = "window")]
     pub fn run(self, options: WindowOptions) -> Result<(), Error> {
-        window::run(self, options)
+        window::run(self, options, |_, _| {})
+    }
+
+    /// Open a desktop window and pass every event to `handler`, one at a time.
+    ///
+    /// The handler can read the document and call [`Runtime::apply`]; the
+    /// window is redrawn afterwards. Call from the main thread.
+    #[cfg(feature = "window")]
+    pub fn run_with(
+        self,
+        options: WindowOptions,
+        mut handler: impl FnMut(&mut Runtime, Event),
+    ) -> Result<(), Error> {
+        self.run_with_events(options, move |runtime, event| {
+            if let RuntimeEvent::Element(event) = event {
+                handler(runtime, event);
+            }
+        })
+    }
+
+    /// Open a window and deliver element and viewport events. The initial viewport
+    /// is delivered before the first frame; later changes precede their frame.
+    /// Apply layout mutations here in response to `ViewportResized`.
+    #[cfg(feature = "window")]
+    pub fn run_with_events(
+        self,
+        options: WindowOptions,
+        handler: impl FnMut(&mut Runtime, RuntimeEvent),
+    ) -> Result<(), Error> {
+        window::run(self, options, handler)
     }
 }
 
-/// An opaque white-backed RGBA frame, with rows stored from top to bottom.
+/// An opaque RGBA frame, with rows stored from top to bottom.
 pub struct Frame {
     pixmap: Pixmap,
 }
@@ -86,7 +191,7 @@ impl Frame {
         self.pixmap.height()
     }
 
-    /// Four bytes per pixel, in RGBA order. The white background makes alpha 255.
+    /// Four bytes per pixel, in RGBA order. The opaque viewport makes alpha 255.
     pub fn rgba(&self) -> &[u8] {
         self.pixmap.data()
     }

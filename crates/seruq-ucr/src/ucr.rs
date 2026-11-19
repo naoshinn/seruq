@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Actions, AssetPath, FontSize, Point, Size, ValueMap};
+use crate::{Actions, AssetPath, Color, FontSize, Point, Size, ValueMap};
 
 pub type ElementId = u64;
 
@@ -17,6 +17,7 @@ pub struct UcrDraft {
 pub struct Metadata {
     version: String,
     default_font: Option<AssetPath>,
+    background: Option<Color>,
 }
 
 impl Metadata {
@@ -24,6 +25,7 @@ impl Metadata {
         Self {
             version,
             default_font,
+            background: None,
         }
     }
 
@@ -33,6 +35,15 @@ impl Metadata {
 
     pub fn default_font(&self) -> Option<&AssetPath> {
         self.default_font.as_ref()
+    }
+
+    pub fn background(&self) -> Option<Color> {
+        self.background
+    }
+
+    pub fn with_background(mut self, background: Color) -> Self {
+        self.background = Some(background);
+        self
     }
 }
 
@@ -64,11 +75,13 @@ impl Element {
 pub enum ElementKind {
     Container {
         children: Vec<ElementId>,
+        background: Option<Color>,
     },
     Text {
         text: String,
         font_size: FontSize,
         font: Option<AssetPath>,
+        color: Option<Color>,
     },
     Image {
         source: AssetPath,
@@ -77,12 +90,16 @@ pub enum ElementKind {
         label: String,
         font_size: FontSize,
         font: Option<AssetPath>,
+        color: Option<Color>,
+        background: Option<Color>,
     },
     TextInput {
         value: String,
         font_size: FontSize,
         font: Option<AssetPath>,
         placeholder: Option<String>,
+        color: Option<Color>,
+        background: Option<Color>,
     },
     Geometry,
 }

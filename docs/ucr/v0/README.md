@@ -64,7 +64,8 @@ The root can be any Element type; it does not have to be a Container.
 Its position is relative to the top-left corner of the viewport.
 Its size is explicit and does not automatically follow the window size.
 
-Metadata records the UCR version and can provide `default_font` for elements that omit their own font.
+Metadata records the UCR version and can provide `default_font` for elements that omit their own font,
+and `background` for the viewport color.
 The version representation and additional metadata fields remain unspecified.
 
 For example, a document with a title and a confirmation button can have this structure:
@@ -188,7 +189,7 @@ Rendering draws the list from first to last. Hit testing searches it from last t
 
 Details still to be specified: Clipping to the bounds of non-Container elements,
 whether elements without actions should also become transparent to hit testing,
-and the field used to specify the overall viewport background.
+and whether additional hit-test behavior is needed for painted Containers.
 
 ## 4. Element Attributes and Rendering Rules
 
@@ -271,15 +272,28 @@ The proposed default is Contain with centered placement. Whether all candidates 
 
 ### 4.3. Colors and Backgrounds
 
-The overall viewport background is white by default, and Container backgrounds are transparent by default.
-Text and shapes are drawn in black by default.
+Color is an opaque sRGB value with three unsigned 8-bit channels: red, green, and blue.
+The JSON encoding is `#RRGGBB`, described in the [JSON mapping](json.md#colors).
+Alpha channels, element opacity, and additional color spaces are outside the current model.
+Antialiased edges and image transparency may still blend with content already drawn;
+exact rasterization and blending tolerances remain implementation-specific under L3 conformance.
 
-The proposed defaults give Button and TextInput white backgrounds. Text, Image, and Geometry do not paint their own backgrounds.
-Not painting a background is distinct from a black or white Color value.
-Images use their own colors.
+`metadata.background` supplies the viewport background, defaulting to white.
+A Container's optional `background` fills its region before its children are drawn,
+clipped by its ancestors. Without a background, it paints nothing. Containers
+remain transparent to hit testing, regardless of whether they paint a background.
 
-Details still to be specified: The Color data type, color space, opacity, and compositing rules.
-Notation such as `#ffffff` is used for readability and does not define an official encoding.
+Text, Button, and TextInput have an optional `color`, defaulting to black.
+Button and TextInput also have an optional `background`, defaulting to white.
+TextInput placeholders default to gray (`#808080`) when `color` is absent;
+an explicit `color` applies to both the value and the placeholder.
+Colors are not inherited. Text, Image, and Geometry do not paint their own backgrounds.
+Images use their own colors; Geometry shapes and fill colors remain a proposal.
+
+The experimental runtime keeps control borders black. While a Button is pressed
+with the pointer over it, each background channel is multiplied by `208 / 255`
+and rounded down; this preserves the previous white-to-gray default. This pressed
+appearance is a runtime presentation choice, not an L2 conformance requirement.
 
 ### 4.4. Geometry
 
@@ -355,9 +369,47 @@ These timings belong to elements. The proposal adds one document-level event tha
 The runtime delivers ViewportResized to the application, which can respond with a Mutation that repositions elements.
 It is also delivered once before the first rendering. Where a document stores the FFR call for this event is unresolved.
 
+The experimental Rust runtime exposes this through a host-level `RuntimeEvent`, separate from
+an element's `Event`. Its window callback receives logical dimensions and scale before the first
+frame and before a frame using a changed viewport. Identical notifications are suppressed;
+zero dimensions can be reported while minimized. A recreated window receives an initial notification
+again. Offscreen hosts explicitly supply the viewport and handle the notification before rendering.
+This host API does not define a document-level action or change the JSON model.
+
 Activated is a single activation event and has no corresponding Unactivated event.
 It can also be used when activating a Button through a keyboard or console.
 A canceled press does not produce Activated.
+
+### 5.2. Pressing a Button
+
+The proposed behavior of a press with a pointer's primary button, in logical coordinates:
+
+1. A press starts when the pointer is pressed and the [hit-test](#31-placed-list-and-hit-testing) target is a Button.
+   The Button receives Pushed. Pressing anything else starts no press, including a Button hidden by another element.
+2. While the press is in progress, moving the pointer produces no events, and no other press can start.
+3. When the pointer is released, the Button receives Released. If the hit-test target at the release point
+   is still that Button, it then receives Activated.
+4. A press is canceled when the runtime can no longer follow it, for example when the window loses focus.
+   The Button receives Released and no Activated.
+
+Consequences of these rules:
+
+- Every Pushed is followed by exactly one Released for the same Button, unless the Button is removed first.
+- Activation depends only on where the pointer is released. Leaving the Button, or the viewport, and returning before
+  the release still activates it. Releasing over a part of the Button that is clipped or covered does not.
+- Released and Activated come from one input. They are still processed one at a time: if the Mutation returned for
+  Released removes the Button, Activated is discarded, even if a later Insert reuses its ID.
+  Queued Events belong to the original element and are never delivered to its replacement.
+- If a Mutation removes the pressed Button, the press ends without further events. Reusing the removed Button's ID
+  in the same Mutation does not continue the press.
+- If a Mutation moves the pressed Button, the press continues; whether it activates is decided by the hit test at release.
+- These Events are produced whether or not the Button has actions.
+
+A runtime may draw a Button differently while it is pressed and the pointer is over it. That appearance is
+temporary runtime state: it is not stored in UCR and is not part of the placed list.
+
+Details still to be specified: Presses with other pointer buttons, touch, and multiple pointers,
+activation by keyboard, and the appearance of the pressed state.
 
 `actions` maps Timing values to FFR calls.
 Functions return UCR Mutations, which the application decides whether to apply and then applies.
@@ -414,8 +466,8 @@ whose `function_name` has no connected function, so that missing functions are f
 
 The first specification proposes synchronous FFR calls: a function receives an Event and returns a Mutation.
 
-Details still to be specified: The final supported event set, event ordering, cancellation notifications,
-asynchronous execution, the syntax of `function_name`, how failures are delivered to the application,
+Details still to be specified: The final supported event set, the ordering of focus and value events,
+a separate cancellation notification, asynchronous execution, the syntax of `function_name`, how failures are delivered to the application,
 and whether an action on an element type that never produces its Timing is a validation warning.
 
 Native data types can be used for passing Mutations, so normal execution does not require encoding and decoding every update.
@@ -462,6 +514,7 @@ Application rules:
   - Remove and Move fail when they target the root.
   - Move fails if `parent` is the element itself or one of its descendants.
   - Update cannot change an element's type, and cannot replace a Container's `children`.
+    The Rust API can replace a Container kind to update its background only when the children sequence is unchanged.
   - Every operation fails if it names an element that does not exist or is not reachable from the root.
   - RemoveState, RemoveData, and RemoveAction have no effect when the key or Timing is absent; this is not a failure.
 - SetState and SetData replace the whole value of a key. Changing part of a Sequence or Map means setting the key again.
@@ -563,9 +616,9 @@ The following areas need defined behavior before independent implementations can
 2. Shaping and tolerance in text measurement, and Image fitting and placement.
 3. TextInput editing state and its relationship to Mutation application.
 4. Geometry path, fill, and stroke rules.
-5. Events supported by each Element, their ordering, and how FFR failures are delivered.
+5. Focus and value events, keyboard and touch input, and how FFR failures are delivered.
 6. The file formats of conformance test cases, and an encoding of Mutations.
 7. Limits on the size and nesting depth of `state` and `data`.
 
-The document also leaves Binary ID encoding, Color representation, diagnostic types, and the Binary layout unspecified.
+The document also leaves Binary ID and Color encodings, diagnostic types, and the Binary layout unspecified.
 These gaps and the proposed designs need to be resolved before v1 is published as an official specification.

@@ -32,6 +32,7 @@ fn draft(
 fn container(children: &[ElementId]) -> ElementKind {
     ElementKind::Container {
         children: children.to_vec(),
+        background: None,
     }
 }
 
@@ -40,6 +41,7 @@ fn text(font_size: f32) -> ElementKind {
         text: "Text".into(),
         font_size: FontSize::new(font_size).unwrap(),
         font: None,
+        color: None,
     }
 }
 
@@ -48,6 +50,8 @@ fn button(font_size: f32) -> ElementKind {
         label: "Button".into(),
         font_size: FontSize::new(font_size).unwrap(),
         font: None,
+        color: None,
+        background: None,
     }
 }
 
@@ -57,6 +61,8 @@ fn text_input(font_size: f32) -> ElementKind {
         font_size: FontSize::new(font_size).unwrap(),
         font: None,
         placeholder: None,
+        color: None,
+        background: None,
     }
 }
 

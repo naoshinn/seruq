@@ -8,7 +8,7 @@ use seruq_ucr::{
 
 use crate::{
     Error,
-    scalar::{JsonFloat, JsonId},
+    scalar::{JsonColor, JsonFloat, JsonId},
     value::JsonValueMap,
 };
 
@@ -29,6 +29,8 @@ struct MetadataJson {
     version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     default_font: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    background: Option<JsonColor>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -83,12 +85,16 @@ struct SizeJson {
 enum ElementKindJson {
     Container {
         children: Vec<JsonId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<JsonColor>,
     },
     Text {
         text: String,
         font_size: JsonFloat,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         font: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<JsonColor>,
     },
     Image {
         source: String,
@@ -98,6 +104,10 @@ enum ElementKindJson {
         font_size: JsonFloat,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         font: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<JsonColor>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<JsonColor>,
     },
     TextInput {
         value: String,
@@ -105,7 +115,11 @@ enum ElementKindJson {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         font: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<JsonColor>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         placeholder: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<JsonColor>,
     },
     Geometry {},
 }
@@ -116,6 +130,7 @@ impl From<&UcrDraft> for UcrJson {
             metadata: MetadataJson {
                 version: draft.metadata.version().to_owned(),
                 default_font: draft.metadata.default_font().map(asset_to_json),
+                background: draft.metadata.background().map(JsonColor),
             },
             root: JsonId(draft.root),
             elements: draft
@@ -203,8 +218,12 @@ impl TryFrom<UcrJson> for UcrDraft {
             .map(|path| asset_from_json(path, None, "default_font"))
             .transpose()?;
 
+        let mut metadata = Metadata::new(document.metadata.version, default_font);
+        if let Some(background) = document.metadata.background {
+            metadata = metadata.with_background(background.0);
+        }
         Ok(Self {
-            metadata: Metadata::new(document.metadata.version, default_font),
+            metadata,
             root: document.root.0,
             elements,
             state: document.state.0,
@@ -215,17 +234,23 @@ impl TryFrom<UcrJson> for UcrDraft {
 impl From<&ElementKind> for ElementKindJson {
     fn from(kind: &ElementKind) -> Self {
         match kind {
-            ElementKind::Container { children } => Self::Container {
+            ElementKind::Container {
+                children,
+                background,
+            } => Self::Container {
                 children: children.iter().copied().map(JsonId).collect(),
+                background: background.map(JsonColor),
             },
             ElementKind::Text {
                 text,
                 font_size,
                 font,
+                color,
             } => Self::Text {
                 text: text.clone(),
                 font_size: JsonFloat(font_size.get()),
                 font: font.as_ref().map(asset_to_json),
+                color: color.map(JsonColor),
             },
             ElementKind::Image { source } => Self::Image {
                 source: asset_to_json(source),
@@ -234,21 +259,29 @@ impl From<&ElementKind> for ElementKindJson {
                 label,
                 font_size,
                 font,
+                color,
+                background,
             } => Self::Button {
                 label: label.clone(),
                 font_size: JsonFloat(font_size.get()),
                 font: font.as_ref().map(asset_to_json),
+                color: color.map(JsonColor),
+                background: background.map(JsonColor),
             },
             ElementKind::TextInput {
                 value,
                 font_size,
                 font,
                 placeholder,
+                color,
+                background,
             } => Self::TextInput {
                 value: value.clone(),
                 font_size: JsonFloat(font_size.get()),
                 font: font.as_ref().map(asset_to_json),
                 placeholder: placeholder.clone(),
+                color: color.map(JsonColor),
+                background: background.map(JsonColor),
             },
             ElementKind::Geometry => Self::Geometry {},
         }
@@ -269,17 +302,23 @@ impl ElementKindJson {
         };
 
         Ok(match self {
-            Self::Container { children } => ElementKind::Container {
+            Self::Container {
+                children,
+                background,
+            } => ElementKind::Container {
                 children: children.into_iter().map(|id| id.0).collect(),
+                background: background.map(|color| color.0),
             },
             Self::Text {
                 text,
                 font_size: size,
                 font: path,
+                color,
             } => ElementKind::Text {
                 text,
                 font_size: font_size(size)?,
                 font: font(path)?,
+                color: color.map(|color| color.0),
             },
             Self::Image { source } => ElementKind::Image {
                 source: asset_from_json(source, Some(id), "source")?,
@@ -288,21 +327,29 @@ impl ElementKindJson {
                 label,
                 font_size: size,
                 font: path,
+                color,
+                background,
             } => ElementKind::Button {
                 label,
                 font_size: font_size(size)?,
                 font: font(path)?,
+                color: color.map(|color| color.0),
+                background: background.map(|color| color.0),
             },
             Self::TextInput {
                 value,
                 font_size: size,
                 font: path,
                 placeholder,
+                color,
+                background,
             } => ElementKind::TextInput {
                 value,
                 font_size: font_size(size)?,
                 font: font(path)?,
                 placeholder,
+                color: color.map(|color| color.0),
+                background: background.map(|color| color.0),
             },
             Self::Geometry {} => ElementKind::Geometry,
         })
